@@ -1,0 +1,21 @@
+{
+  "note": "语音输入的会话项确认。content 是 [{type:input_audio}]，此刻还没有文本——转写要等 transcription.completed。",
+  "payload": {
+    "event": "conversation.item.created",
+    "args": {
+      "previous_item_id": "item_prev",
+      "item": {
+        "id": "item_a",
+        "object": "realtime.item",
+        "type": "message",
+        "role": "user",
+        "status": "completed",
+        "content": [
+          {
+            "type": "input_audio"
+          }
+        ]
+      }
+    }
+  }
+}

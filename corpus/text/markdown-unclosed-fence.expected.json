@@ -1,0 +1,6 @@
+{
+  "case": "markdown-unclosed-fence",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"Look:/n```python\\nprint(1)\\nstill going\",\r\n  \"markdown\": \"Look:/n`python\\nprint(1)\\nstill going\",\r\n  \"sentences\": [\r\n    \"Look:/n```python\\nprint(1)\\nstill going\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

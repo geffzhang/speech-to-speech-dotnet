@@ -1,0 +1,6 @@
+{
+  "case": "function-call-arguments-done",
+  "exit_code": 0,
+  "stdout": "{\"arguments\": \"{\\\"city\\\":\\\"广州\\\"}\", \"call_id\": \"call_a\", \"event_id\": \"<event_id>\", \"item_id\": \"item_b\", \"name\": \"get_weather\", \"output_index\": 0, \"response_id\": \"resp_a\", \"type\": \"response.function_call_arguments.done\"}\r\n",
+  "stderr": ""
+}

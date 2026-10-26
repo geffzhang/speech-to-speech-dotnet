@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ManySpeech.SileroVad" Version="1.1.2" />
+    <PackageReference Include="ManySpeech.WhisperAsr" Version="1.0.1" />
+    <PackageReference Include="ManySpeech.AliParaformerAsr" Version="1.1.9" />
+    <PackageReference Include="TensorSharp.Chat" Version="2026.10.11" />
+    <PackageReference Include="ElBruno.QwenTTS" Version="1.10.2" />
+  </ItemGroup>
+  <ItemGroup Label="探测本实现公开表面时用">
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Realtime\SpeechToSpeech.Realtime.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.ManySpeech\SpeechToSpeech.Backends.ManySpeech.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.TensorSharp\SpeechToSpeech.Backends.TensorSharp.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.QwenTts\SpeechToSpeech.Backends.QwenTts.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.OpenAiCompatible\SpeechToSpeech.Backends.OpenAiCompatible.csproj" />
+  </ItemGroup>
+</Project>

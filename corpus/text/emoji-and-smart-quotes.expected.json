@@ -1,0 +1,6 @@
+{
+  "case": "emoji-and-smart-quotes",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"He said \\\"hello\\\"  and left。真的。\",\r\n  \"markdown\": \"He said “hello” 😀 and left。真的。\"\r\n}\r\n",
+  "stderr": ""
+}

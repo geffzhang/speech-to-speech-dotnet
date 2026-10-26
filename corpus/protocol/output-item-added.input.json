@@ -1,0 +1,18 @@
+{
+  "note": "助手消息项开启，content 为空数组。这是官方客户端建立消息项的锚点——缺了这一条，后续所有 delta 没有落点，整段回复不显示（D013）。",
+  "payload": {
+    "event": "response.output_item.added",
+    "args": {
+      "response_id": "resp_a",
+      "output_index": 0,
+      "item": {
+        "id": "item_b",
+        "object": "realtime.item",
+        "type": "message",
+        "role": "assistant",
+        "status": "in_progress",
+        "content": []
+      }
+    }
+  }
+}

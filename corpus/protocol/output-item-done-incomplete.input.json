@@ -1,0 +1,23 @@
+{
+  "note": "被打断/超长的消息项收口。status=incomplete 而非 completed——客户端据此知道这条消息没说完，不该当成完整一轮写进历史。",
+  "payload": {
+    "event": "response.output_item.done",
+    "args": {
+      "response_id": "resp_a",
+      "output_index": 0,
+      "item": {
+        "id": "item_b",
+        "object": "realtime.item",
+        "type": "message",
+        "role": "assistant",
+        "status": "incomplete",
+        "content": [
+          {
+            "type": "output_audio",
+            "transcript": "我说到一半"
+          }
+        ]
+      }
+    }
+  }
+}

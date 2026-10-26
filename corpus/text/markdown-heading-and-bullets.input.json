@@ -1,0 +1,6 @@
+{
+  "note": "标题标记与列表符号要剥掉，但不能吃掉后一行的内容。",
+  "payload": {
+    "text": "# Heading\n- first item\n* second item\nBody text."
+  }
+}

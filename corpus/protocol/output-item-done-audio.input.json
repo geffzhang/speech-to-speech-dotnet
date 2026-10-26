@@ -1,0 +1,23 @@
+{
+  "note": "消息项收口，content 从空数组变成 [{type:output_audio,transcript}]。客户端把这版 item 落进 response.output 与会话历史。",
+  "payload": {
+    "event": "response.output_item.done",
+    "args": {
+      "response_id": "resp_a",
+      "output_index": 0,
+      "item": {
+        "id": "item_b",
+        "object": "realtime.item",
+        "type": "message",
+        "role": "assistant",
+        "status": "completed",
+        "content": [
+          {
+            "type": "output_audio",
+            "transcript": "你好，世界。"
+          }
+        ]
+      }
+    }
+  }
+}

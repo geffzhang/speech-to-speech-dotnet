@@ -1,0 +1,27 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <NoWarn>$(NoWarn);CS1591;CA1848;CA2007;CA1031</NoWarn>
+    <Version>0.1.0</Version>
+    <Authors>geffzhang</Authors>
+    <Product>SpeechToSpeech (C# port of huggingface/speech-to-speech)</Product>
+    <RepositoryUrl>https://github.com/huggingface/speech-to-speech</RepositoryUrl>
+  </PropertyGroup>
+
+  <!-- 依赖的三个本地参考仓库。任一缺失时对应后端项目仍可编译，
+       只是该后端的适配器在运行期报“模型/运行时未安装”，见 porting/02-differences.md D-12。 -->
+  <PropertyGroup>
+    <ManySpeechRepo Condition="'$(ManySpeechRepo)' == ''">C:\workshop\github\ManySpeech</ManySpeechRepo>
+    <TensorSharpRepo Condition="'$(TensorSharpRepo)' == ''">C:\workshop\github\TensorSharp</TensorSharpRepo>
+    <QwenTtsRepo Condition="'$(QwenTtsRepo)' == ''">C:\workshop\github\ElBruno.QwenTTS</QwenTtsRepo>
+  </PropertyGroup>
+
+</Project>

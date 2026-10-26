@@ -1,0 +1,6 @@
+{
+  "case": "response-done-incomplete",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"id\": \"resp_b\", \"object\": \"realtime.response\", \"output\": [], \"status\": \"incomplete\", \"status_details\": {\"reason\": \"max_output_tokens\", \"type\": \"incomplete\"}}, \"type\": \"response.done\"}\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,9 @@
+{
+  "note": "客户端删项的确认。删掉之后模型下一轮就看不到它——是抹掉上下文，不是仅隐藏。",
+  "payload": {
+    "event": "conversation.item.deleted",
+    "args": {
+      "item_id": "item_a"
+    }
+  }
+}

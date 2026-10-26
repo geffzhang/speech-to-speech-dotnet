@@ -1,0 +1,6 @@
+{
+  "case": "output-item-done-incomplete",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"item\": {\"content\": [{\"transcript\": \"我说到一半\", \"type\": \"output_audio\"}], \"id\": \"item_b\", \"object\": \"realtime.item\", \"role\": \"assistant\", \"status\": \"incomplete\", \"type\": \"message\"}, \"output_index\": 0, \"response_id\": \"resp_a\", \"type\": \"response.output_item.done\"}\r\n",
+  "stderr": ""
+}

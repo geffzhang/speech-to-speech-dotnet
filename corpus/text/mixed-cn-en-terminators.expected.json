@@ -1,0 +1,6 @@
+{
+  "case": "mixed-cn-en-terminators",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"我先说一句中文。Then an English sentence. 再来一句中文！\",\r\n  \"markdown\": \"我先说一句中文。Then an English sentence. 再来一句中文！\"\r\n}\r\n",
+  "stderr": ""
+}

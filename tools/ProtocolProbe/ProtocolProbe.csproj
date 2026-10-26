@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>SpeechToSpeech.Tools.ProtocolProbe</RootNamespace>
+    <Description>协议层探针：为差分语料输出本实现的服务端事件 JSON。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Realtime\SpeechToSpeech.Realtime.csproj" />
+  </ItemGroup>
+
+</Project>

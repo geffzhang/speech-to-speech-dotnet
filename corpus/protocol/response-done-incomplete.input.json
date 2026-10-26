@@ -1,0 +1,18 @@
+{
+  "note": "被截断的终态。reason 必须落进 status_details.reason，客户端据此区分「说完了」和「被打断了」——两者都可能带 output，只有这个字段能区分。",
+  "payload": {
+    "event": "response.done",
+    "args": {
+      "response": {
+        "id": "resp_b",
+        "object": "realtime.response",
+        "status": "incomplete",
+        "output": [],
+        "status_details": {
+          "type": "incomplete",
+          "reason": "max_output_tokens"
+        }
+      }
+    }
+  }
+}

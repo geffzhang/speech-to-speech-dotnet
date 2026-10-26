@@ -1,0 +1,6 @@
+{
+  "case": "content-part-added-audio",
+  "exit_code": 0,
+  "stdout": "{\"content_index\": 0, \"event_id\": \"<event_id>\", \"item_id\": \"item_b\", \"output_index\": 0, \"part\": {\"audio\": \"\", \"transcript\": \"\", \"type\": \"audio\"}, \"response_id\": \"resp_a\", \"type\": \"response.content_part.added\"}\r\n",
+  "stderr": ""
+}

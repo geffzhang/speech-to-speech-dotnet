@@ -1,0 +1,6 @@
+{
+  "note": "未闭合围栏时整段视为一个句子，避免把半个代码块念出来。",
+  "payload": {
+    "text": "Look:/n```python\nprint(1)\nstill going"
+  }
+}

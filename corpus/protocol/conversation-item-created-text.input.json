@@ -1,0 +1,22 @@
+{
+  "note": "客户端用 conversation.item.create 塞进来的文本消息。content 原样回带 [{type:input_text,text:…}]——只回 role 会让客户端渲染出空消息体（D014）。",
+  "payload": {
+    "event": "conversation.item.created",
+    "args": {
+      "previous_item_id": "item_prev",
+      "item": {
+        "id": "item_a",
+        "object": "realtime.item",
+        "type": "message",
+        "role": "user",
+        "status": "completed",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "你好，帮我查一下天气。"
+          }
+        ]
+      }
+    }
+  }
+}

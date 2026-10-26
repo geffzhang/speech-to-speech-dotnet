@@ -1,0 +1,9 @@
+{
+  "note": "链路首个项没有前驱。缺省时整个 previous_item_id 字段必须省略，而不是给 null——客户端按\"字段存在与否\"判断首项。",
+  "payload": {
+    "event": "input_audio_buffer.committed",
+    "args": {
+      "item_id": "item_a"
+    }
+  }
+}

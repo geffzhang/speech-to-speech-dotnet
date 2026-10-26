@@ -1,0 +1,6 @@
+{
+  "case": "input-audio-committed",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"item_id\": \"item_a\", \"previous_item_id\": \"item_prev\", \"type\": \"input_audio_buffer.committed\"}\r\n",
+  "stderr": ""
+}

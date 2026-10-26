@@ -1,0 +1,7 @@
+{
+  "note": "中英混排时两个纯函数的处理。含中文标点，故 split=false（理由见 C005）。",
+  "payload": {
+    "text": "我先说一句中文。Then an English sentence. 再来一句中文！",
+    "split": false
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "note": "纯文本换行是否保留——影响 TTS 停顿。",
+  "payload": {
+    "text": "Line one\nLine two\n\nLine four."
+  }
+}

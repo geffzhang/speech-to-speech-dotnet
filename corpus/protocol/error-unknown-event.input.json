@@ -1,0 +1,13 @@
+{
+  "note": "未知客户端事件。error 是嵌套对象，形状与 OpenAI 客户端解析的一致。",
+  "payload": {
+    "event": "error",
+    "args": {
+      "error": {
+        "type": "invalid_request_error",
+        "code": "unknown_or_invalid_event",
+        "message": "unknown event type 'foo'"
+      }
+    }
+  }
+}

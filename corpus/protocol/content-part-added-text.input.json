@@ -1,0 +1,16 @@
+{
+  "note": "纯文本模态的内容片开启：type=text，text 空串。与 audio 版的区别只在 part 内部。",
+  "payload": {
+    "event": "response.content_part.added",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_b",
+      "output_index": 0,
+      "content_index": 0,
+      "part": {
+        "type": "text",
+        "text": ""
+      }
+    }
+  }
+}

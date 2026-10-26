@@ -1,0 +1,6 @@
+{
+  "case": "speech-stopped",
+  "exit_code": 0,
+  "stdout": "{\"audio_end_ms\": 1200, \"event_id\": \"<event_id>\", \"item_id\": \"item_a\", \"type\": \"input_audio_buffer.speech_stopped\"}\r\n",
+  "stderr": ""
+}

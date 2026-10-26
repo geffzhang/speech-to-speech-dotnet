@@ -1,0 +1,6 @@
+{
+  "case": "markdown-heading-and-bullets",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"# Heading\\n- first item\\n* second item\\nBody text.\",\r\n  \"markdown\": \"Heading\\nfirst item\\nsecond item\\nBody text.\",\r\n  \"sentences\": [\r\n    \"# Heading\\n- first item\\n* second item\\nBody text.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

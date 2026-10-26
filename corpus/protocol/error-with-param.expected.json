@@ -1,0 +1,6 @@
+{
+  "case": "error-with-param",
+  "exit_code": 0,
+  "stdout": "{\"error\": {\"code\": \"invalid_value\", \"message\": \"session.update requires a 'session' object\", \"param\": \"session\", \"type\": \"invalid_request_error\"}, \"event_id\": \"<event_id>\", \"type\": \"error\"}\r\n",
+  "stderr": ""
+}

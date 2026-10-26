@@ -1,0 +1,6 @@
+{
+  "case": "conversation-item-created-voice",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"item\": {\"content\": [{\"type\": \"input_audio\"}], \"id\": \"item_a\", \"object\": \"realtime.item\", \"role\": \"user\", \"status\": \"completed\", \"type\": \"message\"}, \"previous_item_id\": \"item_prev\", \"type\": \"conversation.item.created\"}\r\n",
+  "stderr": ""
+}

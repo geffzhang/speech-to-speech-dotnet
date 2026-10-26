@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpeechToSpeech.Backends.QwenTts</RootNamespace>
+    <Description>基于 ElBruno.QwenTTS（Qwen3-TTS ONNX）的本地 TTS 后端。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ElBruno.QwenTTS" Version="1.10.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+  </ItemGroup>
+
+</Project>

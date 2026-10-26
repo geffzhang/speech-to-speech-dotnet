@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpeechToSpeech.Backends.ManySpeech</RootNamespace>
+    <Description>基于 ManySpeech（ONNX Runtime）的 VAD 与 STT 后端。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ManySpeech.SileroVad" Version="1.1.2" />
+    <PackageReference Include="ManySpeech.WhisperAsr" Version="1.0.1" />
+    <PackageReference Include="ManySpeech.AliParaformerAsr" Version="1.1.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+  </ItemGroup>
+
+</Project>

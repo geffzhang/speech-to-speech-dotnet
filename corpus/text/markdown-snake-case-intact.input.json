@@ -1,0 +1,6 @@
+{
+  "note": "snake_case 标识符中的下划线不得被当成强调配对吃掉。",
+  "payload": {
+    "text": "Set my_var_name to 3 * 4. Done."
+  }
+}

@@ -1,0 +1,13 @@
+# 参照实现探针的依赖。装在这里：
+#   C:/Users/geffzhang/.workbuddy/binaries/python/envs/default
+#
+# 版本与上游 C:/workshop/github/speech-to-speech/pyproject.toml 对齐；
+# 上游升级时这里要跟着改，然后重录语料并逐条看差异。
+
+openai==2.28.0     # 官方 Realtime 事件模型，协议层基线来源
+nltk==3.10.4       # 文本层分句（Punkt）
+pillow             # 上游 LLM/utils.py 顶层 import 需要
+requests           # 同上
+numpy              # 上游 service.py 依赖链
+scipy              # 上游 service.py 依赖链
+starlette          # 只为核对 send_json 的 ensure_ascii 设置

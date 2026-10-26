@@ -1,0 +1,6 @@
+{
+  "case": "transcription-completed",
+  "exit_code": 0,
+  "stdout": "{\"content_index\": 0, \"event_id\": \"<event_id>\", \"item_id\": \"item_a\", \"transcript\": \"今天天气不错\", \"type\": \"conversation.item.input_audio_transcription.completed\", \"usage\": {\"seconds\": 3.5, \"type\": \"duration\"}}\r\n",
+  "stderr": ""
+}

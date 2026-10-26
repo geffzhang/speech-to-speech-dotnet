@@ -1,0 +1,6 @@
+{
+  "note": "缩写里的点号不得切断句子——这是 Punkt 与确定性规则最容易分叉的地方。",
+  "payload": {
+    "text": "Dr. Smith met Mr. Jones at 5 p.m. and they talked. Then everyone left."
+  }
+}

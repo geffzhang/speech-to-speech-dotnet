@@ -1,0 +1,6 @@
+{
+  "case": "conversation-item-deleted",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"item_id\": \"item_a\", \"type\": \"conversation.item.deleted\"}\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,11 @@
+{
+  "note": "增量转写。上游模型里 content_index 可选，显式给 0 才与实现可比。",
+  "payload": {
+    "event": "conversation.item.input_audio_transcription.delta",
+    "args": {
+      "item_id": "item_a",
+      "delta": "你好",
+      "content_index": 0
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "case": "response-done-failed",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"id\": \"resp_c\", \"object\": \"realtime.response\", \"output\": [], \"status\": \"failed\", \"status_details\": {\"error\": {\"code\": \"server_error\", \"message\": \"语音后端返回 500\"}, \"type\": \"failed\"}}, \"type\": \"response.done\"}\r\n",
+  "stderr": ""
+}

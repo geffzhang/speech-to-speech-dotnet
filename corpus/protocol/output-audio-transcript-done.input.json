@@ -1,0 +1,13 @@
+{
+  "note": "助手转写收口，transcript 是整段文本而非增量。",
+  "payload": {
+    "event": "response.output_audio_transcript.done",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_b",
+      "transcript": "你好，世界。",
+      "content_index": 0,
+      "output_index": 0
+    }
+  }
+}

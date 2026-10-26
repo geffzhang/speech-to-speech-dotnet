@@ -1,0 +1,6 @@
+{
+  "case": "markdown-fenced-code-literal",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"Here is code:/n```python\\nprint('a. b.')\\n```\\nDone.\",\r\n  \"markdown\": \"Here is code:/n`python\\nprint('a. b.')\\n`\\nDone.\",\r\n  \"sentences\": [\r\n    \"Here is code:/n```python\\nprint('a. b.')\\n```\\nDone.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

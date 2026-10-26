@@ -1,0 +1,16 @@
+{
+  "note": "纯文本模态的内容片收口。",
+  "payload": {
+    "event": "response.content_part.done",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_b",
+      "output_index": 0,
+      "content_index": 0,
+      "part": {
+        "type": "text",
+        "text": "你好，世界。"
+      }
+    }
+  }
+}

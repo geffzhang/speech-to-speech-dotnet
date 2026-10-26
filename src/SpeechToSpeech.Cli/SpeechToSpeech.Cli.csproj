@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>SpeechToSpeech.Cli</RootNamespace>
+    <AssemblyName>speech-to-speech</AssemblyName>
+    <Description>语音转语音管线命令行：serve / local / talk。</Description>
+  </PropertyGroup>
+
+  <ItemGroup Label="音频设备 I/O。3.x 起 NAudio 元包为单一 net9.0 包，WinMM + WASAPI 可在 net10.0 直接用；ALSA 后端需单独引用（元包不含，无 net9.0-linux TFM）。">
+    <PackageReference Include="NAudio" Version="3.3.0" />
+    <PackageReference Include="NAudio.Alsa" Version="3.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Realtime\SpeechToSpeech.Realtime.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Backends.ManySpeech\SpeechToSpeech.Backends.ManySpeech.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Backends.TensorSharp\SpeechToSpeech.Backends.TensorSharp.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Backends.QwenTts\SpeechToSpeech.Backends.QwenTts.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Backends.OpenAiCompatible\SpeechToSpeech.Backends.OpenAiCompatible.csproj" />
+  </ItemGroup>
+
+</Project>

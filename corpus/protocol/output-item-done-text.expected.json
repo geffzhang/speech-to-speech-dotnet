@@ -1,0 +1,6 @@
+{
+  "case": "output-item-done-text",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"item\": {\"content\": [{\"text\": \"你好，世界。\", \"type\": \"output_text\"}], \"id\": \"item_b\", \"object\": \"realtime.item\", \"role\": \"assistant\", \"status\": \"completed\", \"type\": \"message\"}, \"output_index\": 0, \"response_id\": \"resp_a\", \"type\": \"response.output_item.done\"}\r\n",
+  "stderr": ""
+}

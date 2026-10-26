@@ -1,0 +1,23 @@
+{
+  "note": "纯文本模态的消息项收口，content 是 [{type:output_text,text}]。",
+  "payload": {
+    "event": "response.output_item.done",
+    "args": {
+      "response_id": "resp_a",
+      "output_index": 0,
+      "item": {
+        "id": "item_b",
+        "object": "realtime.item",
+        "type": "message",
+        "role": "assistant",
+        "status": "completed",
+        "content": [
+          {
+            "type": "output_text",
+            "text": "你好，世界。"
+          }
+        ]
+      }
+    }
+  }
+}

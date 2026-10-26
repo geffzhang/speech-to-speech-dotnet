@@ -1,0 +1,13 @@
+{
+  "note": "助手转写增量，带中文与全角标点——顺带锁住 UTF-8 不被转义成 \\uXXXX。",
+  "payload": {
+    "event": "response.output_audio_transcript.delta",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_b",
+      "delta": "你好，世界。",
+      "content_index": 0,
+      "output_index": 0
+    }
+  }
+}

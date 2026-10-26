@@ -1,0 +1,6 @@
+{
+  "note": "URL 与邮箱里的点号不应触发切分。",
+  "payload": {
+    "text": "Mail me at a.b@example.com or visit https://example.com/x.y. Thanks."
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "note": "纯文本模态收口。text 是整段而非增量，客户端用它替换此前累积的值。",
+  "payload": {
+    "event": "response.output_text.done",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_b",
+      "output_index": 0,
+      "content_index": 0,
+      "text": "你好，世界。"
+    }
+  }
+}

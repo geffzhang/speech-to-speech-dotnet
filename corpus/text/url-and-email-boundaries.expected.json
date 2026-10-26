@@ -1,0 +1,6 @@
+{
+  "case": "url-and-email-boundaries",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"Mail me at a.b@example.com or visit https://example.com/x.y. Thanks.\",\r\n  \"markdown\": \"Mail me at a.b@example.com or visit https://example.com/x.y. Thanks.\",\r\n  \"sentences\": [\r\n    \"Mail me at a.b@example.com or visit https://example.com/x.y.\",\r\n    \"Thanks.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

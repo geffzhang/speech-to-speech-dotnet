@@ -1,0 +1,6 @@
+{
+  "note": "围栏代码块整体保留，里面的句号不触发切分，反引号不被当行内代码。",
+  "payload": {
+    "text": "Here is code:/n```python\nprint('a. b.')\n```\nDone."
+  }
+}

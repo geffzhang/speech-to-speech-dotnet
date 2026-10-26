@@ -1,0 +1,21 @@
+{
+  "note": "后端失败的终态。失败不是用顶层 error 事件表达的，而是把错误塞进 status_details.error，且必须带 code——只给 message 的客户端无法区分「可重试」和「不可重试」。",
+  "payload": {
+    "event": "response.done",
+    "args": {
+      "response": {
+        "id": "resp_c",
+        "object": "realtime.response",
+        "status": "failed",
+        "output": [],
+        "status_details": {
+          "type": "failed",
+          "error": {
+            "code": "server_error",
+            "message": "语音后端返回 500"
+          }
+        }
+      }
+    }
+  }
+}

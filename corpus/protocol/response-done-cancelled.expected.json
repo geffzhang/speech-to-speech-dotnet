@@ -1,0 +1,6 @@
+{
+  "case": "response-done-cancelled",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"id\": \"resp_a\", \"object\": \"realtime.response\", \"output\": [], \"status\": \"cancelled\", \"status_details\": {\"reason\": \"client_cancelled\", \"type\": \"cancelled\"}}, \"type\": \"response.done\"}\r\n",
+  "stderr": ""
+}

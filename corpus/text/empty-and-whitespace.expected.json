@@ -1,0 +1,6 @@
+{
+  "case": "empty-and-whitespace",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"   \\n\\t  \",\r\n  \"markdown\": \"   \\n\\t  \",\r\n  \"sentences\": []\r\n}\r\n",
+  "stderr": ""
+}

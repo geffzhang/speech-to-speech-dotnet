@@ -1,0 +1,6 @@
+{
+  "case": "abbreviation-not-a-boundary",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"Dr. Smith met Mr. Jones at 5 p.m. and they talked. Then everyone left.\",\r\n  \"markdown\": \"Dr. Smith met Mr. Jones at 5 p.m. and they talked. Then everyone left.\",\r\n  \"sentences\": [\r\n    \"Dr. Smith met Mr. Jones at 5 p.m. and they talked.\",\r\n    \"Then everyone left.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

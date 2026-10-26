@@ -1,0 +1,12 @@
+{
+  "note": "助手音频结束。不带 delta，但 content_index / output_index 仍是必填。",
+  "payload": {
+    "event": "response.output_audio.done",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_b",
+      "content_index": 0,
+      "output_index": 0
+    }
+  }
+}

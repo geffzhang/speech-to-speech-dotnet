@@ -1,0 +1,14 @@
+{
+  "note": "工具调用参数就绪。arguments 是字符串化 JSON，不能是对象。",
+  "payload": {
+    "event": "response.function_call_arguments.done",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_b",
+      "output_index": 0,
+      "call_id": "call_a",
+      "name": "get_weather",
+      "arguments": "{\"city\":\"广州\"}"
+    }
+  }
+}

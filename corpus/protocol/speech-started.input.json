@@ -1,0 +1,10 @@
+{
+  "note": "VAD 判定说话开始。四个必填字段缺一不可，item_id 由服务端分配。",
+  "payload": {
+    "event": "input_audio_buffer.speech_started",
+    "args": {
+      "item_id": "item_a",
+      "audio_start_ms": 0
+    }
+  }
+}

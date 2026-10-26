@@ -1,0 +1,6 @@
+{
+  "case": "markdown-emphasis-and-bold",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"This is **bold** and *italic* text. End.\",\r\n  \"markdown\": \"This is bold and italic text. End.\",\r\n  \"sentences\": [\r\n    \"This is **bold** and *italic* text.\",\r\n    \"End.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

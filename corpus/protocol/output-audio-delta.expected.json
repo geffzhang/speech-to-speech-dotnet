@@ -1,0 +1,6 @@
+{
+  "case": "output-audio-delta",
+  "exit_code": 0,
+  "stdout": "{\"content_index\": 0, \"delta\": \"//8A+/8=\", \"event_id\": \"<event_id>\", \"item_id\": \"item_b\", \"output_index\": 0, \"response_id\": \"resp_a\", \"type\": \"response.output_audio.delta\"}\r\n",
+  "stderr": ""
+}

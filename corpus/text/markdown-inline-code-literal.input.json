@@ -1,0 +1,6 @@
+{
+  "note": "行内代码里的标点不切分，反引号成对剥离。",
+  "payload": {
+    "text": "Use `foo.bar()` first. Then continue."
+  }
+}

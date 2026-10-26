@@ -1,0 +1,7 @@
+{
+  "note": "表情符号应丢弃、智能引号归一为 ASCII 引号、中文标点保留。句子末尾是中文句号，故 split=false（理由同 cjk-terminator-boundary，见 C005）。",
+  "payload": {
+    "text": "He said “hello” 😀 and left。真的。",
+    "split": false
+  }
+}

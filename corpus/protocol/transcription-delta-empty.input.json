@@ -1,0 +1,11 @@
+{
+  "note": "空 delta 是合法边界：上游不做非空校验，客户端也不会因此崩。",
+  "payload": {
+    "event": "conversation.item.input_audio_transcription.delta",
+    "args": {
+      "item_id": "item_a",
+      "delta": "",
+      "content_index": 0
+    }
+  }
+}

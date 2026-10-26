@@ -1,0 +1,14 @@
+{
+  "note": "带 param 的校验错误。param 指向具体字段，客户端据此定位入参。",
+  "payload": {
+    "event": "error",
+    "args": {
+      "error": {
+        "type": "invalid_request_error",
+        "code": "invalid_value",
+        "message": "session.update requires a 'session' object",
+        "param": "session"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "note": "转写完成。usage 在官方 schema 里是必填（duration 或 tokens 二选一），缺了按 Pydantic 校验的客户端会整条拒收。上游报 duration 形态，seconds 是这一输入项的音频时长，不是连接总时长。",
+  "payload": {
+    "event": "conversation.item.input_audio_transcription.completed",
+    "args": {
+      "item_id": "item_a",
+      "content_index": 0,
+      "transcript": "今天天气不错",
+      "usage": {
+        "type": "duration",
+        "seconds": 3.5
+      }
+    }
+  }
+}

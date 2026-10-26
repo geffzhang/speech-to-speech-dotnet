@@ -1,0 +1,6 @@
+{
+  "note": "粗体/斜体分隔符剥掉但保留内部文字。",
+  "payload": {
+    "text": "This is **bold** and *italic* text. End."
+  }
+}

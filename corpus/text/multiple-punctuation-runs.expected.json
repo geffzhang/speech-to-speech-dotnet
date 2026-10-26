@@ -1,0 +1,6 @@
+{
+  "case": "multiple-punctuation-runs",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"What?! Really... Yes.\",\r\n  \"markdown\": \"What?! Really... Yes.\",\r\n  \"sentences\": [\r\n    \"What?!\",\r\n    \"Really...\",\r\n    \"Yes.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

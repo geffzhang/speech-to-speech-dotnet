@@ -1,0 +1,10 @@
+{
+  "note": "长会话里 audio_start_ms 会很大。锁住它是整数而非浮点，且不丢精度。",
+  "payload": {
+    "event": "input_audio_buffer.speech_started",
+    "args": {
+      "item_id": "item_long",
+      "audio_start_ms": 1800000
+    }
+  }
+}

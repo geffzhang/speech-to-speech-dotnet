@@ -1,0 +1,18 @@
+{
+  "note": "用户打断后的终态。取消路径必须回 response.done，否则客户端会一直认为这一轮还在进行，后续请求被排队。status_details.type 必须与 status 同域（cancelled），不能借用 incomplete。",
+  "payload": {
+    "event": "response.done",
+    "args": {
+      "response": {
+        "id": "resp_a",
+        "object": "realtime.response",
+        "status": "cancelled",
+        "output": [],
+        "status_details": {
+          "type": "cancelled",
+          "reason": "client_cancelled"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "case": "markdown-snake-case-intact",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"Set my_var_name to 3 * 4. Done.\",\r\n  \"markdown\": \"Set my_var_name to 3 * 4. Done.\",\r\n  \"sentences\": [\r\n    \"Set my_var_name to 3 * 4.\",\r\n    \"Done.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

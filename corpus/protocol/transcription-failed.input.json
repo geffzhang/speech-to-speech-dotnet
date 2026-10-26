@@ -1,0 +1,15 @@
+{
+  "note": "item 作用域的转写失败。不是全局 error：客户端据此只标这一条输入为失败并继续对话，用 error 会让它误判整条连接有问题。",
+  "payload": {
+    "event": "conversation.item.input_audio_transcription.failed",
+    "args": {
+      "content_index": 0,
+      "item_id": "item_a",
+      "error": {
+        "type": "transcription_error",
+        "code": "transcription_failed",
+        "message": "empty transcript"
+      }
+    }
+  }
+}

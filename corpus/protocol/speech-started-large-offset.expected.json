@@ -1,0 +1,6 @@
+{
+  "case": "speech-started-large-offset",
+  "exit_code": 0,
+  "stdout": "{\"audio_start_ms\": 1800000, \"event_id\": \"<event_id>\", \"item_id\": \"item_long\", \"type\": \"input_audio_buffer.speech_started\"}\r\n",
+  "stderr": ""
+}

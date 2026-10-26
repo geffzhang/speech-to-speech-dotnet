@@ -1,0 +1,6 @@
+{
+  "case": "markdown-inline-code-literal",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"Use `foo.bar()` first. Then continue.\",\r\n  \"markdown\": \"Use foo.bar() first. Then continue.\",\r\n  \"sentences\": [\r\n    \"Use `foo.bar()` first.\",\r\n    \"Then continue.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

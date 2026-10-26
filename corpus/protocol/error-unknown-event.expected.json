@@ -1,0 +1,6 @@
+{
+  "case": "error-unknown-event",
+  "exit_code": 0,
+  "stdout": "{\"error\": {\"code\": \"unknown_or_invalid_event\", \"message\": \"unknown event type 'foo'\", \"type\": \"invalid_request_error\"}, \"event_id\": \"<event_id>\", \"type\": \"error\"}\r\n",
+  "stderr": ""
+}

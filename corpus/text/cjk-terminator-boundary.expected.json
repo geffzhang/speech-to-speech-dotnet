@@ -1,0 +1,6 @@
+{
+  "case": "cjk-terminator-boundary",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"一句话。第二句话！第三句话？\",\r\n  \"markdown\": \"一句话。第二句话！第三句话？\"\r\n}\r\n",
+  "stderr": ""
+}

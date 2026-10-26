@@ -1,0 +1,10 @@
+{
+  "note": "VAD 判定说话结束，audio_end_ms 用于客户端对齐时间轴。",
+  "payload": {
+    "event": "input_audio_buffer.speech_stopped",
+    "args": {
+      "item_id": "item_a",
+      "audio_end_ms": 1200
+    }
+  }
+}

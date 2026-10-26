@@ -1,0 +1,6 @@
+{
+  "case": "conversation-item-created-text",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"item\": {\"content\": [{\"text\": \"你好，帮我查一下天气。\", \"type\": \"input_text\"}], \"id\": \"item_a\", \"object\": \"realtime.item\", \"role\": \"user\", \"status\": \"completed\", \"type\": \"message\"}, \"previous_item_id\": \"item_prev\", \"type\": \"conversation.item.created\"}\r\n",
+  "stderr": ""
+}

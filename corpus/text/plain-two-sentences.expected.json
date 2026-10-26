@@ -1,0 +1,6 @@
+{
+  "case": "plain-two-sentences",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"Hello there. This is a second sentence.\",\r\n  \"markdown\": \"Hello there. This is a second sentence.\",\r\n  \"sentences\": [\r\n    \"Hello there.\",\r\n    \"This is a second sentence.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

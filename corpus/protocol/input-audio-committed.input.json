@@ -1,0 +1,10 @@
+{
+  "note": "speech_stopped 之后、转写之前的定稿确认。previous_item_id 串起会话项顺序链，客户端断线重连后靠它把对话补齐。",
+  "payload": {
+    "event": "input_audio_buffer.committed",
+    "args": {
+      "item_id": "item_a",
+      "previous_item_id": "item_prev"
+    }
+  }
+}

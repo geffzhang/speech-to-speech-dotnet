@@ -1,0 +1,13 @@
+{
+  "note": "纯文本模态的增量。中文与全角标点原样上线，顺带锁住 UTF-8 不被转义（C012）。",
+  "payload": {
+    "event": "response.output_text.delta",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_b",
+      "output_index": 0,
+      "content_index": 0,
+      "delta": "你好，世界。"
+    }
+  }
+}

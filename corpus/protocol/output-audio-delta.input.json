@@ -1,0 +1,13 @@
+{
+  "note": "助手音频增量。delta 是 base64；用含 '+' 与 '/' 的载荷，顺带锁住编码器不转义这些字符。",
+  "payload": {
+    "event": "response.output_audio.delta",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_b",
+      "delta": "//8A+/8=",
+      "content_index": 0,
+      "output_index": 0
+    }
+  }
+}

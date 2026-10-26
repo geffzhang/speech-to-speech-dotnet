@@ -1,0 +1,6 @@
+{
+  "case": "transcription-delta",
+  "exit_code": 0,
+  "stdout": "{\"content_index\": 0, \"delta\": \"你好\", \"event_id\": \"<event_id>\", \"item_id\": \"item_a\", \"type\": \"conversation.item.input_audio_transcription.delta\"}\r\n",
+  "stderr": ""
+}

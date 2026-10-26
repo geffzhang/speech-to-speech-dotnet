@@ -1,0 +1,6 @@
+{
+  "case": "newline-preserved-in-plain-text",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"unspeakable\": \"Line one\\nLine two\\n\\nLine four.\",\r\n  \"markdown\": \"Line one\\nLine two\\n\\nLine four.\",\r\n  \"sentences\": [\r\n    \"Line one\\nLine two\\n\\nLine four.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}
