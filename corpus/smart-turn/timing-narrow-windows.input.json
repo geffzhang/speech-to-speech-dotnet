@@ -1,0 +1,14 @@
+{
+  "note": "非默认配置：投机窗口 300、最长等待 1500、处理延迟 400。锁住三条都取自配置而不是写死在默认值上",
+  "payload": {
+    "mode": "timing",
+    "classifier": "incomplete",
+    "probability": 0.4,
+    "config": {
+      "speculative_reopen_ms": 300,
+      "smart_turn_max_wait_ms": 1500,
+      "smart_turn_incomplete_delay_ms": 400,
+      "smart_turn_threshold": 0.5
+    }
+  }
+}

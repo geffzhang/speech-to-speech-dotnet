@@ -1,0 +1,8 @@
+{
+  "note": "正好 8 秒：原样返回，不补不截。这条是另外两条的对照基准",
+  "payload": {
+    "mode": "window",
+    "samples": 128000,
+    "pattern": "ramp"
+  }
+}

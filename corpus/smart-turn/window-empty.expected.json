@@ -1,0 +1,6 @@
+{
+  "case": "window-empty",
+  "exit_code": 0,
+  "stdout": "{\"bits_hash\": \"0x4a6410bd92766325\", \"head_bits\": [0, 0, 0, 0], \"leading_zeros\": 128000, \"length\": 128000, \"tail_bits\": [0, 0, 0, 0], \"trailing_zeros\": 128000}\r\n",
+  "stderr": ""
+}

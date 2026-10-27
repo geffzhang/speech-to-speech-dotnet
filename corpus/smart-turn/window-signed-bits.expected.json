@@ -1,0 +1,6 @@
+{
+  "case": "window-signed-bits",
+  "exit_code": 0,
+  "stdout": "{\"bits_hash\": \"0x3d485facf9c697c6\", \"head_bits\": [3198777557, 3197536043, 3196294529, 3194046382], \"leading_zeros\": 0, \"length\": 128000, \"tail_bits\": [3210253173, 3209632416, 3209011659, 3208390902], \"trailing_zeros\": 0}\r\n",
+  "stderr": ""
+}

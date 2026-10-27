@@ -1,0 +1,6 @@
+{
+  "case": "timing-failed",
+  "exit_code": 0,
+  "stdout": "{\"analysis_seconds_is_null\": false, \"grace_ms\": 800, \"processing_delay_ms\": 0, \"status\": \"failed\"}\r\n",
+  "stderr": "Smart Turn inference failed; using the default speculative reopen grace\r\nTraceback (most recent call last):\r\n  File \"C:\\workshop\\github\\speech-to-speech\\src\\speech_to_speech\\VAD\\vad_handler.py\", line 528, in _smart_turn_timing_ms\r\n    result = analyzer.predict(audio, sample_rate=self.sample_rate)\r\n  File \"C:\\Users\\geffzhang\\WorkBuddy\\speech-to-speech-dotnet\\tools\\refprobe\\smart_turn_probe.py\", line 101, in predict\r\n    raise RuntimeError(\"stub inference failure\")\r\nRuntimeError: stub inference failure\r\n"
+}

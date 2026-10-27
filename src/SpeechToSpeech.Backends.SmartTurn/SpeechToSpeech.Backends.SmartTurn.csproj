@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpeechToSpeech.Backends.SmartTurn</RootNamespace>
+    <Description>Smart Turn v3.2 端点判定器（ONNX Runtime + Whisper 前端）。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SpeechToSpeech.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+  </ItemGroup>
+
+</Project>

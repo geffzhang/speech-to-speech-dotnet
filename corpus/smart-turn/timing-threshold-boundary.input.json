@@ -1,0 +1,14 @@
+{
+  "note": "概率正好等于阈值：上游是严格大于（probability > threshold），所以算没说完。差一个等号就会把「刚好 0.5」判成说完，宽限从 2000 掉到 800",
+  "payload": {
+    "mode": "timing",
+    "classifier": "incomplete",
+    "probability": 0.5,
+    "config": {
+      "speculative_reopen_ms": 800,
+      "smart_turn_max_wait_ms": 2000,
+      "smart_turn_incomplete_delay_ms": 600,
+      "smart_turn_threshold": 0.5
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "note": "判定说完了：宽限就是投机窗口，处理立刻开始——这是最常见的路径",
+  "payload": {
+    "mode": "timing",
+    "classifier": "complete",
+    "probability": 0.93,
+    "config": {
+      "speculative_reopen_ms": 800,
+      "smart_turn_max_wait_ms": 2000,
+      "smart_turn_incomplete_delay_ms": 600,
+      "smart_turn_threshold": 0.5
+    }
+  }
+}

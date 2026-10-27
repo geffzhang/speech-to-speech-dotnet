@@ -1,0 +1,14 @@
+{
+  "note": "处理延迟大于最长等待：取 min(delay, max_wait)。不钳制的话，判定给自己发的期限会比它自己的宽限还晚，输出会在宽限过期后仍被认为还在处理",
+  "payload": {
+    "mode": "timing",
+    "classifier": "incomplete",
+    "probability": 0.1,
+    "config": {
+      "speculative_reopen_ms": 800,
+      "smart_turn_max_wait_ms": 500,
+      "smart_turn_incomplete_delay_ms": 900,
+      "smart_turn_threshold": 0.5
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "note": "判定器抛异常：退回投机窗口、不推迟处理。临时故障不该让回复凭空多等两秒；状态记 failed 以便与「用户关掉了」区分",
+  "payload": {
+    "mode": "timing",
+    "classifier": "failed",
+    "probability": 0.0,
+    "config": {
+      "speculative_reopen_ms": 800,
+      "smart_turn_max_wait_ms": 2000,
+      "smart_turn_incomplete_delay_ms": 600,
+      "smart_turn_threshold": 0.5
+    }
+  }
+}

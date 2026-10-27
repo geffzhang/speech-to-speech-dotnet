@@ -1,0 +1,13 @@
+{
+  "note": "没有判定器（未启用，或本构建无 ONNX 实现）：宽限退回投机窗口、处理不推迟，分析耗时记为 null（上游同样不记）",
+  "payload": {
+    "mode": "timing",
+    "classifier": "disabled",
+    "config": {
+      "speculative_reopen_ms": 800,
+      "smart_turn_max_wait_ms": 2000,
+      "smart_turn_incomplete_delay_ms": 600,
+      "smart_turn_threshold": 0.5
+    }
+  }
+}

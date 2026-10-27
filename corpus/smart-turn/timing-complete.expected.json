@@ -1,0 +1,6 @@
+{
+  "case": "timing-complete",
+  "exit_code": 0,
+  "stdout": "{\"analysis_seconds_is_null\": false, \"grace_ms\": 800, \"processing_delay_ms\": 0, \"status\": \"complete\"}\r\n",
+  "stderr": ""
+}

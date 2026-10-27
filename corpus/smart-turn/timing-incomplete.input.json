@@ -1,0 +1,14 @@
+{
+  "note": "判定没说完：宽限拉到 smart_turn_max_wait_ms，并把处理推迟 incomplete_delay_ms，让用户接着说的那几个字在 STT/LLM 开工之前作废本轮修订",
+  "payload": {
+    "mode": "timing",
+    "classifier": "incomplete",
+    "probability": 0.21,
+    "config": {
+      "speculative_reopen_ms": 800,
+      "smart_turn_max_wait_ms": 2000,
+      "smart_turn_incomplete_delay_ms": 600,
+      "smart_turn_threshold": 0.5
+    }
+  }
+}

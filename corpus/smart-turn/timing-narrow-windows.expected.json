@@ -1,0 +1,6 @@
+{
+  "case": "timing-narrow-windows",
+  "exit_code": 0,
+  "stdout": "{\"analysis_seconds_is_null\": false, \"grace_ms\": 1500, \"processing_delay_ms\": 400, \"status\": \"incomplete\"}\r\n",
+  "stderr": ""
+}

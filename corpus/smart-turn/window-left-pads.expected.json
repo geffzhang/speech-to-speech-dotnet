@@ -1,0 +1,6 @@
+{
+  "case": "window-left-pads",
+  "exit_code": 0,
+  "stdout": "{\"bits_hash\": \"0x7ed30d5dc26e1985\", \"head_bits\": [0, 0, 0, 0], \"leading_zeros\": 88001, \"length\": 128000, \"tail_bits\": [1062870188, 1063490945, 1064111702, 1064732459], \"trailing_zeros\": 0}\r\n",
+  "stderr": ""
+}

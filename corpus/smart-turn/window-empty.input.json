@@ -1,0 +1,8 @@
+{
+  "note": "空音频：整窗补零。phantom 触发后定稿的空段会走到这里，不能因为除零或越界抛异常——上游这里返回全零",
+  "payload": {
+    "mode": "window",
+    "samples": 0,
+    "pattern": "ramp"
+  }
+}

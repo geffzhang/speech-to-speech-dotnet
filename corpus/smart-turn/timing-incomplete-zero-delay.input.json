@@ -1,0 +1,14 @@
+{
+  "note": "没说完但处理延迟配成 0：宽限仍然拉到 max_wait，只是不推迟处理。两项互相独立，不能用一个期限代替另一个",
+  "payload": {
+    "mode": "timing",
+    "classifier": "incomplete",
+    "probability": 0.1,
+    "config": {
+      "speculative_reopen_ms": 800,
+      "smart_turn_max_wait_ms": 2000,
+      "smart_turn_incomplete_delay_ms": 0,
+      "smart_turn_threshold": 0.5
+    }
+  }
+}

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>SpeechToSpeech.Tools.SmartTurnProbe</RootNamespace>
+    <Description>Smart Turn 探针：喂脚本化判定器，输出宽限/处理延迟/状态与模型输入窗口，供与上游逐值比对。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+  </ItemGroup>
+
+</Project>

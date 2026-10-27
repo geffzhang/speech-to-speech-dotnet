@@ -1,0 +1,6 @@
+{
+  "case": "timing-disabled",
+  "exit_code": 0,
+  "stdout": "{\"analysis_seconds_is_null\": true, \"grace_ms\": 800, \"processing_delay_ms\": 0, \"status\": \"disabled\"}\r\n",
+  "stderr": ""
+}

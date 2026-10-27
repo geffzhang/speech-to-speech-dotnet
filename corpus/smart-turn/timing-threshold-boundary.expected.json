@@ -1,0 +1,6 @@
+{
+  "case": "timing-threshold-boundary",
+  "exit_code": 0,
+  "stdout": "{\"analysis_seconds_is_null\": false, \"grace_ms\": 2000, \"processing_delay_ms\": 600, \"status\": \"incomplete\"}\r\n",
+  "stderr": ""
+}
