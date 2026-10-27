@@ -8,7 +8,7 @@
 ## 依赖与参考
 
 - **一律 NuGet 正式版**，不挂本地工程引用；预发布包不进默认构建。已用：ManySpeech.SileroVad 1.1.2 / WhisperAsr 1.0.1 / AliParaformerAsr 1.1.9 / TensorSharp.Chat 2026.10.11 / ElBruno.QwenTTS 1.10.2 / NAudio(+Alsa) 3.3.0 / NAudio.Core 3.3.0（OpenAiCompatible 直引，WDL sinc 重采样内核）/ PortAudioSharp2 1.0.6（macOS 音频，原生库由 org.k2fsa.portaudio.runtime.* 按 RID 提供）/ SIPSorcery 10.0.17 / Concentus 2.2.2（Opus，工厂返回 IOpusEncoder/IOpusDecoder，Span 编码签名带 frame_size）。
-- 同域参考（只取工程形态不取行为语义）：`C:\workshop\github\ElBruno.Realtime`（8662db1）、tryAGI.WebRTC（e64acf3）、`C:\workshop\github\Aurio`（重采样内核参考；其 NAudioWdlResampler 用 interp=true 实为线性插值，本实现取托管内核思路改用 sinc 模式）。SIPSorcery.OpenAI.Realtime 仅形态参照（BY-NC-SA 不可作依赖）。
+- 同域参考（只取工程形态不取行为语义）：`C:\workshop\github\ElBruno.Realtime`（8662db1）、tryAGI.WebRTC（e64acf3）、`C:\workshop\github\Aurio`（重采样内核参考；其 NAudioWdlResampler 用 interp=true 实为线性插值，本实现取托管内核思路改用 sinc 模式）。SIPSorcery.OpenAI.Realtime 仅形态参照（BY-NC-SA 不可作依赖）。**例外**：`BasisVR/Basis`（developer acfca6b）的 com.basis.openlipsync/Runtime/Ported 是 D031 口型引擎的**移植来源**（行为语义参与对拍，非仅形态）。
 
 ## 核心纪律
 
@@ -53,6 +53,14 @@
 - 上游 talk 的 sounddevice 形态：`RawInputStream/RawOutputStream`，int16/单声道/blocksize 定块。
 - 绑定冒烟 3 例（原生库解析/嵌套引用计数/枚举），macOS 真机未实跑（与 Linux ALSA 同口径）。
 
+## 口型引擎（D031 resolved，2026-10-27）
+
+- `src/SpeechToSpeech.Backends.OpenLipSync`：移植 Basis com.basis.openlipsync（MIT）推理核——AudioRingBuffer/48tap Blackman-sinc 多相重采样/FFT（实输入直出功率谱）/Hann+HTK mel（80×100Hz）/TCN 流式 ONNX（cache_* 乒乓 IoBinding，OrtValue+RunWithBinding）/双极点平滑器（2·y1−y2 消群延迟）。ORT 1.31.0 与 Smart Turn 同栈。
+- **mel 滑动窗是因果对齐**：prev=240 零起步，窗口=prev+新 hop，prev=window[160..400]——不是 librosa 居中分帧；互证参照必须按此语义直算。
+- 重采样 1:1 不是恒等直通（0.45·fs 低通+半样本相移）；尾部 23 样本留延迟线（halfTaps−1）。
+- 转换层 `VisemeTimeline`：OVR15→MS21 映射表锁定（[0,21,18,17,19,20,16,15,19,13,2,4,6,3,7]），argmax+相邻合并成上游 {viseme,start_s,end_s} 区间。Core `Viseme` record 已改上游形状（VisemeId/StartSeconds/EndSeconds）。
+- 模型 `models/viseme/model.onnx`(10.7MB)+config.json 不入库（.gitignore models/）；端到端流式不变性测试由 `SPEECH_TO_SPEECH_VISEME_MODEL_DIR` 门控。管线接线（STV 级/visemes 事件/enable_visemes 配置）+ 说话人分离仍在 D009（gap）。
+
 ## 当前状态（2026-10-27）
 
-差异账 64 条：resolved 48 / accepted 15 / gap 1（仅剩 D009 口型/说话人分离——架构性）。测试 381/381。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15）。
+差异账 66 条：resolved 49 / accepted 16 / gap 1（仅剩 D009：口型管线接线+说话人分离）。测试 401/401。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy——mel/FFT 互证参照）。
