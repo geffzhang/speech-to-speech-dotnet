@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpeechToSpeech.Evals</RootNamespace>
+    <Description>Big Bench Audio 评估套件（上游 evals/big_bench_audio 的 C# 对应物）。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SpeechToSpeech.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="3.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Backends.OpenAiCompatible\SpeechToSpeech.Backends.OpenAiCompatible.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -15,6 +15,7 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/ApiProbe/ApiProbe.csproj" />
+    <Project Path="tools/EvalProbe/EvalProbe.csproj" />
     <Project Path="tools/LanguageProbe/LanguageProbe.csproj" />
     <Project Path="tools/ProtocolProbe/ProtocolProbe.csproj" />
     <Project Path="tools/SmartTurnProbe/SmartTurnProbe.csproj" />

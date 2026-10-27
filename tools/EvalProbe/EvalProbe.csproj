@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>SpeechToSpeech.EvalProbe</RootNamespace>
+    <Description>Big Bench Audio vibe check CLI（python -m speech_to_speech.evals.big_bench_audio 的对应物）。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Evals\SpeechToSpeech.Evals.csproj" />
+  </ItemGroup>
+
+</Project>
