@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpeechToSpeech.Audio.Diarization</RootNamespace>
+    <Description>流式说话人分离（谁在什么时候说话）：帧级 speaker mask 解码、有界增量音频状态、会话级 speaker 原型与修订协议。无模型运行时依赖，模型由接缝注入。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SpeechToSpeech.Tests" />
+  </ItemGroup>
+
+</Project>
