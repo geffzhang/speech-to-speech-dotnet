@@ -21,14 +21,16 @@
 | VAD / STT | `C:\workshop\github\ManySpeech` | — | NuGet `ManySpeech.SileroVad 1.1.2`、`ManySpeech.WhisperAsr 1.0.1`、`ManySpeech.AliParaformerAsr 1.1.9` |
 | LLM | `C:\workshop\github\TensorSharp` | — | NuGet `TensorSharp.Chat 2026.10.11` |
 | TTS | `C:\workshop\github\ElBruno.QwenTTS` | — | NuGet `ElBruno.QwenTTS 1.10.2` |
-| 音频设备 I/O | `C:\workshop\github\NAudio` | `54cb8188`（`VersionPrefix` 3.3.1，未发布） | NuGet `NAudio 3.3.0`、`NAudio.Alsa 3.3.0` |
+| 音频设备 I/O | `C:\workshop\github\NAudio`、`C:\workshop\github\PortAudioSharp2` | `54cb8188`（`VersionPrefix` 3.3.1，未发布） | NuGet `NAudio 3.3.0`、`NAudio.Alsa 3.3.0`、`PortAudioSharp2 1.0.6` |
 
-四者均以 NuGet 包引用，不挂本地工程引用——构建可复现，也不受参考仓库工作区状态影响。
+五者均以 NuGet 包引用，不挂本地工程引用——构建可复现，也不受参考仓库工作区状态影响。
 
 > NAudio 的特殊之处：本地仓库在 3.3.1 开发线上，NuGet 上最新正式版是 3.3.0，故取 3.3.0。
 > 跨平台后端里 `NAudio.Alsa` 有 3.3.0 正式版，而 `NAudio.MacOS` 只有 `3.3.0-preview.34`，
-> 官方 README 明写 "still in pre-release phase and breaking code changes may be performed"，
-> 因此 macOS 未接入默认构建，见差异账 E-01。
+> 官方 README 明写 "still in pre-release phase and breaking changes may be performed"，
+> 因此 macOS 不走 NAudio，改以 **PortAudioSharp2 1.0.6**（csukuangfj/PortAudioSharp2，
+> Apache-2.0，NuGet 正式版）补齐——上游 `sounddevice` 底层就是 PortAudio，同引擎对齐，
+> 见差异账 E001。
 
 ### 同域参考（设计参考，不参与行为等价，也不是运行时来源）
 

@@ -194,7 +194,7 @@
       修复前（C024）第一轮的取消把整条连接的丢弃保护永久打开，第二轮响应只有 `response.created` 与空的 `response.done`；
       修复后第二轮完整出转写、分片与终态，被取消的第一轮照常发 done（`status=cancelled`）并回滚历史。
 - [ ] **容器内** —— 未做（E002）：无 Dockerfile、无发布包
-- [ ] **跨平台**（Windows / Linux / macOS）—— 部分：`serve` 纯托管代码，理论跨平台；`talk`/`local` 的音频后端已在 Windows（WASAPI + WinMM）与 Linux（ALSA）实现，macOS 缺（E001）。Windows 已实跑设备创建；**Linux 与 macOS 未在真实设备上跑过**
+- [ ] **跨平台**（Windows / Linux / macOS）—— 代码路径齐备：`serve` 纯托管代码，理论跨平台；`talk`/`local` 音频后端三平台均接入——Windows（WASAPI + WinMM）、Linux（ALSA）、macOS（PortAudio，PortAudioSharp2 1.0.6，E001 已解决）。Windows 已实跑设备创建；**Linux 与 macOS 未在真实设备上跑过**（绑定冒烟 3 例通过）
 - [ ] **带真实音频设备的一轮对话** —— 仍未做：`local`/`talk` 需要真人对着麦克风说话，本轮用 `serve` + 脚本化客户端替代，验证的是同一套协议与管线
 - [x] **跨传输** —— 仅 WebSocket。WebRTC 未移植（D003），明确记为缺口而非「支持」
 
@@ -212,7 +212,7 @@
 | 接合点的时序与真实后端的交互 | `VadHandler` 与真实 VAD 后端的两轮/打断交互已用脚本化客户端实跑（C023/C024 由此暴露并修复）；剩余的是真实麦克风/扬声器下的全双工行为（回声、半双工时序） | 低——协议与管线层面已闭合，剩下的是声学环境问题，不影响行为等价判定 |
 | Smart Turn 判定的「incomplete」路径未在真实音频上触发 | 判定器概率已与参照链路逐值对齐（合成音频 <1e-4），但手头的测试音频截断处恰好语义完整，参照侧也判 complete | 低——incomplete 之后的决策（推迟 600ms、max_wait 2000ms、复开）由 `corpus/smart-turn` 13 条语料与 `TurnEndTiming` 单测锁定；真实对话中自然会出现 |
 | 实时转写未移植（D005） | `openai-realtime` / `vllm-realtime` 两个 STT 后端不可用 | `BackendUnavailableException` 显式报错，不静默降级 |
-| 音频后端跨平台不全（E001） | macOS 无 `talk`/`local`；Linux ALSA 路径未实跑 | Windows 已实跑设备创建；Linux 需在装有 `libasound.so.2` 的机器上验证；macOS 等 `NAudio.MacOS` 出正式版 |
+| 音频后端跨平台不全（**E001 已解决 2026-10-27**） | macOS 已接入 PortAudio（PortAudioSharp2 1.0.6，与上游 sounddevice 同引擎）；Linux ALSA 路径仍未实跑 | Windows 已实跑设备创建；Linux 需在装有 `libasound.so.2` 的机器上验证；macOS 需真机跑一轮 `talk`（发布时带 osx-x64/osx-arm64 原生库） |
 | 语言识别的原生库覆盖不全（D006 已补） | lingua 原生库只有 win-x64 / linux-x64 / osx-arm64；其余平台（Linux arm64、macOS x64）该后端抛 `BackendUnavailableException` | 与 E001 同一类平台缺口，不静默降级；补包即可，不影响决策层（决策层与检测器解耦，已有 25 例单测） |
 | 语言识别结果未在真实对话上验证 | `corpus/lang` 证明与上游逐值一致，但那只覆盖决策层；「TTS 是否真的换了发音」需要听 | 低——参数已按上游口径接到 `TtsRequest.Language`，剩下是后端行为 |
 | 无容器镜像（E002） | 无法在服务端标准部署 | 服务端可 `dotnet run`，但缺可复现交付物 |
@@ -344,3 +344,23 @@ C031（音频解码/重采样内核差异，accepted）、C032（HF 云工作流
 不移植，报告本地 JSON、上游报告文件可被 C# compare 直接读取，accepted）。
 差异账 **64 条（resolved 47 / accepted 15 / gap 2）**，gap 仅剩口型/分离（D009）与 macOS 音频（E001）。
 测试 **378/378**（+52），全解决方案 0 警告 0 错误。
+
+### macOS 音频后端（2026-10-27，E001 收口）
+
+`talk`/`local` 的音频设备 I/O 补齐第三平台。验收分三层：
+
+1. **同引擎对齐（选型证据）**：上游 `talk` 用 `sounddevice`（`RawInputStream/RawOutputStream`，
+   int16 / 单声道 / blocksize 定块）收放音频，其底层是 PortAudio。macOS 路径取
+   **PortAudioSharp2 1.0.6**（NuGet 正式版，Apache-2.0；原生库由配套 `org.k2fsa.portaudio.runtime.*`
+   按 RID 提供，含 osx-x64 / osx-arm64）——设备枚举、默认设备选择、`framesPerBuffer` ↔
+   `blocksize` 语义与上游一致。Windows/Linux 维持 NAudio 后端不动。
+2. **抽象接线**：`PortAudioWaveIn` / `PortAudioWavePlayer` 实现 NAudio 的 `IWaveIn` /
+   `IWavePlayer`（补齐 `OutputWaveFormat`、`Volume` 软件缩放），`AudioClient` 与
+   `AudioDevices.Create()` 无感知切换；回调只拷贝入队（守住 ClientWebSocket 禁并发 Send 的
+   约束）；`Pa_Initialize`/`Pa_Terminate` 按官方「配对可重叠」语义逐设备配对。
+3. **绑定冒烟（设备无关，3 例）**：原生库随测试宿主解析成功（Windows 上加载 portaudio.dll）、
+   版本信息非空、嵌套 Initialize/Terminate 配对后枚举 API 仍可用、设备数可以为 0 不炸。
+   真实 macOS 硬件的开流行为留真机验证（与 Linux ALSA 同口径）。
+
+账本动作：E001 翻 resolved。差异账 **64 条（resolved 48 / accepted 15 / gap 1）**，
+gap 仅剩口型/分离（D009）。测试 **381/381**（+3），全解决方案 0 警告 0 错误。

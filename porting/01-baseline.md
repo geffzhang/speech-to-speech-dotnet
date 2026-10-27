@@ -229,5 +229,5 @@
 | 轮次状态机的接合点未实测 | 状态机自身与上游逐值一致，但 `VadHandler` 何时调 `SpeechCandidateStarted` / `SegmentDiscarded` 没有真跑验证 | 中——接错时机仍会退化成「卡住」或「停顿即两轮」 | 真跑一轮带打断的对话，对照上游日志的轮次序列 |
 | `local` / `talk` 未实跑 | 缺 Silero/Whisper/Qwen3-TTS 模型文件与麦克风 | **高**——全链路首次真跑可能暴露队列时序问题 | 备齐模型后单机跑一轮，录下音频与事件时序 |
 | 12 个后端无运行时 | D010 | 低——`BackendUnavailableException` 显式报错，不静默降级 | 按需逐步补齐 |
-| 跨平台音频 I/O | E001 —— Windows 与 Linux 后端已实现，macOS 缺（NAudio.MacOS 仅预发布） | 中 —— Linux ALSA 路径未在真实设备上验证；服务端 `serve` 不受影响 | Windows 已实跑设备创建；Linux 需在装 `libasound.so.2` 的机器上跑一轮；macOS 等 `NAudio.MacOS` 出正式版 |
+| 跨平台音频 I/O | E001 已解决 —— Windows（WASAPI+WinMM）/Linux（ALSA）/macOS（PortAudioSharp2 1.0.6，与上游 sounddevice 同引擎）三后端齐备 | 低 —— Linux ALSA 与 macOS 路径均未在真实设备上验证；服务端 `serve` 不受影响 | Windows 已实跑设备创建；Linux 需在装 `libasound.so.2` 的机器上跑一轮；macOS 需真机跑一轮 talk |
 | 惰性加载的模型路径 | E003 运行期报错 | 低——首次合成才失败，非启动即失败 | 可加 `--check-models` 预检 |
