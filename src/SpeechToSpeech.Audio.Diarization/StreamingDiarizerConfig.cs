@@ -23,13 +23,17 @@ public sealed record StreamingDiarizerConfig
     /// </summary>
     public int HopSamples { get; init; }
 
-    /// <summary>本地说话人轨道开启的概率阈值。</summary>
+    /// <summary>本地说话人轨道开启的概率阈值；也是判定「凹陷」的界线。</summary>
     public double Onset { get; init; } = 0.5;
 
-    /// <summary>概率低于此值才开始计入关闭（在 <see cref="Onset"/> 之下的滞回带）。</summary>
-    public double Offset { get; init; } = 0.35;
-
-    /// <summary>轨道低于 <see cref="Offset"/> 持续多久之后关闭该轮。</summary>
+    /// <summary>
+    /// 概率掉到 <see cref="Onset"/> 之下持续多久之后关闭该轮。
+    ///
+    /// <para>这里曾经有一个更低的 offset（onset 的 0.7 倍）作为关断门槛，参照实现就是这么写的。
+    /// 真实权重上它不成立：模型对两段语音之间的短停顿给出约 0.40 的持续弱响应，既低于 onset
+    /// 又远高于 0.35，于是凹陷永远不成立、两个人的话被缝成一段，声纹取到混合声后整场只剩一个
+    /// 说话人。凹陷只按 onset 判定——多切几段无害（同一人的相邻段共享标签），缝在一起就没救了。</para>
+    /// </summary>
     public double MinSilenceDuration { get; init; } = 0.2;
 
     /// <summary>短于此值的轮次不单独判定，交给连续性策略。</summary>

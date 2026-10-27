@@ -397,17 +397,45 @@ public sealed class StreamingDiarizer
     private Segment? Associate(LocalTurn turn, long firstFrame, long turnStartFrame, long turnEnd, out bool alreadyCommitted)
     {
         alreadyCommitted = false;
+
+        // 先按「这个通道上一窗口在续接哪个段」认亲，而且**不论这个轮次是不是从窗口开头开始的**。
+        // 窗口约 10 秒、跳长不到 1 秒，所以一段 3 秒的话会被十来个窗口看到；后续窗口里它的起点
+        // 落在 own 区中间（StartFrame > 0），如果只在 StartFrame == 0 时才查通道映射，
+        // 这些窗口就只能靠 FindOpen 在**尚未结束**的段里找——而它早被 Finalize 移出 _open 了。
+        // 于是每个窗口都给它发一个新 id：时间线上是一堆互相咬住的段，总时长能超过音频本身。
+        Segment? tracked = null;
+        if (_channelMap.TryGetValue(turn.Speaker, out string? trackedId))
+            _history.TryGetValue(trackedId, out tracked);
+
+        if (tracked is not null)
+        {
+            // 上一段的帧区间盖住了本窗口看到的这一帧：同一个轮次又出现了一次。
+            if (turnStartFrame >= tracked.FirstFrame - 1 && turnStartFrame <= tracked.LastFrame + 1)
+            {
+                if (tracked.Extendable) return tracked;
+
+                // 已提交：本窗口这次观测能提供的信息它都有了。只有尾巴伸得更远才算新消息。
+                alreadyCommitted = turnEnd <= tracked.EndSample;
+                return null;
+            }
+
+            // 段还在长、而且一直长到本窗口开头：通道中间没有断过，继续用它。
+            if (turn.StartFrame == 0 && tracked.Extendable && tracked.LastFrame >= firstFrame - 1)
+                return tracked;
+
+            // 段已提交，而本窗口的轮次也结束在它结束的地方：这是后一个窗口在重报那个已完成的轮次
+            // （收尾窗口与它的前驱重叠），不是又发现了一个。
+            if (turn.StartFrame == 0 && !tracked.Extendable && turnEnd <= tracked.EndSample)
+            {
+                alreadyCommitted = true;
+                return null;
+            }
+        }
+
+        // 通道上没有人在续接，而这个轮次也不是从窗口开头开始的：它必是别的窗口已经开过的段。
         if (turn.StartFrame > 0) return FindOpen(turnStartFrame);
 
-        if (!_channelMap.TryGetValue(turn.Speaker, out var id) || !_history.TryGetValue(id, out var previous))
-            return null; // 这个通道上没有人在说话：轮次确实从这里开始
-
-        if (previous.Extendable && previous.LastFrame >= firstFrame - 1) return previous;
-
-        // 通道上的段已经提交，而这个 run 结束在它结束的地方：这是后一个窗口在重报那个已完成的轮次
-        // （收尾窗口与它的前驱重叠），不是又发现了一个。
-        alreadyCommitted = !previous.Extendable && turnEnd <= previous.EndSample;
-        return null;
+        return null; // 这个通道上没有人在说话：轮次确实从这里开始
     }
 
     // 后一个窗口重报的同一个轮次：模型从 run 自己的起点开始报，所以起点帧就是它还在窗口里时的身份。
@@ -447,7 +475,11 @@ public sealed class StreamingDiarizer
         if (length <= 0) return null;
 
         if (_embeddingScratch.Length < length) _embeddingScratch = new float[length];
-        int copied = _audio.CopyTo(from, _embeddingScratch);
+
+        // 必须把**本段的长度**传给 CopyTo：它按目标 span 的长度复制，而 scratch 只增不减
+        // （复用上次的分配）。整块传进去的话，一段 2 秒的话会连着它后面 4 秒的音频一起被算进声纹，
+        // 于是所有段的向量都朝「整条音轨的平均」收敛，谁跟谁都像——表现就是永远只有 1 个说话人。
+        int copied = _audio.CopyTo(from, _embeddingScratch.AsSpan(0, length));
         return copied == 0 ? null : _embedding.Embed(_embeddingScratch.AsSpan(0, copied), SampleRate);
     }
 
@@ -463,8 +495,15 @@ public sealed class StreamingDiarizer
     /// <summary>窗口内某个本地说话人通道上的一段连续帧。</summary>
     private readonly record struct LocalTurn(int Speaker, int StartFrame, int EndFrame, double Confidence);
 
-    // 逐本地通道的 onset/offset 滞回：>= Onset 开，Offset 之下持续 MinSilenceDuration 才关。
-    // 更短的凹陷被吸收（换气、爆破音），这正是换人不会被切成相隔几帧的两个轮次的原因。
+    // 每个本地通道一段活动轨道的 onset / 静音关断。
+    //
+    // 「关」的判据是概率掉到 Onset 之下并持续 MinSilenceDuration——不是掉到某个更低的 offset 之下。
+    // 参照实现用的是「低于 offset(0.7×onset) 才算静音」，可真实模型的概率经常在 0.4 附近徘徊：
+    // 两个说话人之间那段短停顿、拼接处的数字静音，模型都给出 0.40 左右的持续弱响应。
+    // 它既明显低于 onset，又远高于 0.35，于是凹陷永远不成立，两个人的语音被连成一个轮次；
+    // 声纹取到的是两个人的混合声，之后所有段都跟这个「半人半鬼」的原型比、谁跟谁都像，
+    // 最后整场只得出一个说话人。宁可多切几段（同一说话人的相邻段共享标签，无害），
+    // 也不能把两个人缝进一段——缝进去就没有任何下游手段能拆开。
     private List<LocalTurn> ExtractTurns(SpeakerMaskWindow masks)
     {
         var turns = new List<LocalTurn>();
@@ -499,7 +538,7 @@ public sealed class StreamingDiarizer
 
                 sum += probability;
                 counted++;
-                if (probability >= _config.Offset)
+                if (probability >= _config.Onset)
                 {
                     silent = 0;
                 }

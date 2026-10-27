@@ -154,6 +154,12 @@ public sealed class DiarizationOptions
     /// </summary>
     public string? SegmentationModelPath { get; init; }
 
+    /// <summary>
+    /// 声纹模型（3D-Speaker / WeSpeaker 系的 ONNX 导出）。它把一段轮次音频压成单位向量，
+    /// 是「这是不是刚才那个人」的唯一来源——没有它就只知谁在说话、不知是不是同一个谁。
+    /// </summary>
+    public string? SpeakerEmbeddingModelPath { get; init; }
+
     /// <summary>ONNX 会话的算子内并行度。</summary>
     public int ThreadCount { get; init; } = 1;
 
@@ -209,6 +215,15 @@ public sealed class DiarizationOptions
             throw new ArgumentException("启用流式说话人分离（--diarization）必须给出 --diarization_model");
         }
 
+        // 声纹模型同口径：缺了它，分割照样跑、时间线照样建，但转写永远不会带 speaker——
+        // 那正是 D033 收口之前的半开状态。现在有实现了，就不该再悄悄退回去。
+        if (Enabled && string.IsNullOrWhiteSpace(SpeakerEmbeddingModelPath))
+        {
+            throw new ArgumentException(
+                "启用流式说话人分离（--diarization）必须给出 --speaker_embedding_model" +
+                "（或 SPEECH_TO_SPEECH_SPEAKER_EMBEDDING_MODEL）");
+        }
+
         if (Threshold is <= 0 or >= 1)
         {
             throw new ArgumentException($"分离阈值必须在 (0, 1) 之间；收到 {Threshold}。");
@@ -229,7 +244,6 @@ public sealed class DiarizationOptions
             WindowSamples = SnapToFrameGrid(WindowMs, rate, segmentation.FrameShiftSamples),
             HopSamples = SnapToFrameGrid(HopMs, rate, segmentation.FrameShiftSamples),
             Onset = Threshold,
-            Offset = Threshold * 0.7,
             MatchThreshold = MatchThreshold,
             NewSpeakerThreshold = NewSpeakerThreshold,
             MaxSpeakers = MaxSpeakers,
