@@ -21,7 +21,6 @@ public sealed class StreamingDiarizerTests
             WindowSamples = WindowSamples,
             HopSamples = HopSamples,
             Onset = 0.5,
-            Offset = 0.35,
             MinSilenceDuration = 0.04,
             MinSpeechDuration = 0.06,
             MinEmbeddingDuration = 0.08,
@@ -341,6 +340,29 @@ public sealed class StreamingDiarizerTests
             MaxBufferedSeconds = 20,
         };
         Assert.Throws<ArgumentException>(() => new StreamingDiarizer(model, new ToneEmbedding(), config));
+    }
+
+    // 一段话的声纹只能来自它自己的音频。
+    //
+    // 内部取音缓冲按需增长、之后复用；把整块缓冲交给 CopyTo 时，它会按缓冲的**当前长度**复制，
+    // 于是先来一段 6 秒、再来一段 0.6 秒时，短的那次会连着上一段的残留一起送进声纹。
+    // 后果不是崩溃，而是所有向量都朝「整条音轨的平均」收敛——谁跟谁都像，整场只剩一个说话人。
+    [Fact]
+    public void An_embedding_sees_only_its_own_turn()
+    {
+        var (diarizer, embedding) = Create();
+
+        var audio = DiarizationTone.Build(7.0,
+            (0.0, 6.0, 0.5, 0.0),  // 长段：把取音缓冲撑到 6 秒
+            (6.3, 6.9, 0.0, 0.5)); // 短段：只有 0.6 秒
+
+        Run(diarizer, audio);
+
+        var seconds = embedding.Lengths.Select(n => n / (double)SampleRate).ToArray();
+        Assert.True(
+            seconds.Any(s => s <= 1.2),
+            "没有任何一次声纹只取到短段（夹带了上一段的音频）：" +
+            string.Join(", ", seconds.Select(s => $"{s:F2}s")));
     }
 
     private static string[] Describe(IReadOnlyList<SpeakerSegmentUpdate> segments) =>

@@ -106,9 +106,16 @@ internal sealed class ToneEmbedding : ISpeakerEmbedding
     /// <summary>取过多少次声纹——用来断言声纹开销随轮次而不是随音频增长。</summary>
     public int Calls { get; private set; }
 
+    /// <summary>
+    /// 每次取声纹时实际收到的样本数。用来断言「只取本段」：内部的取音缓冲只增不减，
+    /// 一旦把整块缓冲交给声纹，短段的向量里就会混进上一段的音频。
+    /// </summary>
+    public List<int> Lengths { get; } = [];
+
     public float[] Embed(ReadOnlySpan<float> audio, int sampleRate)
     {
         Calls++;
+        Lengths.Add(audio.Length);
         var dominant = new double[2];
         var all = new double[2];
         var row = new float[2];

@@ -26,7 +26,6 @@ public sealed class DiarizationHandlerTests
         WindowSamples = WindowSamples,
         HopSamples = 640,
         Onset = 0.5,
-        Offset = 0.35,
         MinSilenceDuration = 0.04,
         MinEmbeddingDuration = 0.08,
         MinNewSpeakerEvidence = 0.15,
