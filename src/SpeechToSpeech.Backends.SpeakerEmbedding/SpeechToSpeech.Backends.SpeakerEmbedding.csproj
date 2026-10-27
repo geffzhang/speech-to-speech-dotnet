@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpeechToSpeech.Backends.SpeakerEmbedding</RootNamespace>
+    <Description>说话人声纹后端（ONNX Runtime + Kaldi fbank）：3D-Speaker / WeSpeaker 系模型，把单轮音频压成 L2 归一化向量，供流式说话人分离判身份。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SpeechToSpeech.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpeechToSpeech.Audio.Diarization\SpeechToSpeech.Audio.Diarization.csproj" />
+  </ItemGroup>
+
+</Project>
