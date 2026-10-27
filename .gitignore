@@ -405,3 +405,6 @@ tools/llamacpp/
 
 # 冒烟脚本运行时产物
 tools/smoke/serve.pid
+
+# 口型模型资产（D031：Basis OpenLipSync model.onnx 10.7MB + config.json，不入库）
+models/

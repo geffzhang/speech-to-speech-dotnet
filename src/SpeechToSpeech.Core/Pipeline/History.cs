@@ -1,8 +1,16 @@
 using SpeechToSpeech.Core.Runtime;
 namespace SpeechToSpeech.Core.Pipeline;
 
-/// <summary>一个口型形状及其触发时刻。</summary>
-public sealed record Viseme(string Value, double OffsetSeconds, double DurationSeconds);
+/// <summary>
+/// 一个口型形状及其在响应音频时间线上的区间。
+///
+/// 对应上游 <c>pipeline/visemes.py</c> 的 <c>Viseme</c>：Microsoft SAPI 兼容口型
+/// <c>0–21</c>（线字段名 <c>viseme</c>，序列化时映射 <see cref="VisemeId"/>），
+/// <c>start_s/end_s</c> 是响应音频时间线上的秒（管线侧偏移由 STV 级加好）。
+/// <paramref name="EndSeconds"/> 必须不早于 <paramref name="StartSeconds"/>
+/// （上游 pydantic 校验 <c>ordered_interval</c>；C# 侧由构造方保证）。
+/// </summary>
+public sealed record Viseme(int VisemeId, double StartSeconds, double EndSeconds);
 
 /// <summary>说话人归属。</summary>
 public sealed record SpeakerAttribution(string SpeakerId, string? Label = null);
