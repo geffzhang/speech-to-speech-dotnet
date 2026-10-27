@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using SpeechToSpeech.Core.Json;
+using SpeechToSpeech.Core.Pipeline;
 
 namespace SpeechToSpeech.Realtime.Protocol;
 
@@ -552,6 +553,39 @@ public static class ServerEvent
             ["content_index"] = 0,
             ["delta"] = audioBase64,
         };
+
+    /// <summary>
+    /// <c>speech_to_speech.output_audio.visemes</c>：口型扩展事件。
+    ///
+    /// 上游在与音频同一 <c>item_id/output_index/content_index</c> 上先发这条、再发音频块；
+    /// 标准音频事件完全不变，不认识该事件的客户端会忽略它。
+    /// 区间是响应音频时间线上的绝对秒（STV 级已经加好窗口偏移）。
+    /// </summary>
+    public static JsonObject OutputAudioVisemes(string responseId, string itemId,
+        IReadOnlyList<Viseme> visemes, int outputIndex = 0)
+    {
+        var payload = new JsonArray();
+        foreach (var viseme in visemes)
+        {
+            payload.Add(new JsonObject
+            {
+                ["viseme"] = viseme.VisemeId,
+                ["start_s"] = viseme.StartSeconds,
+                ["end_s"] = viseme.EndSeconds,
+            });
+        }
+
+        return new JsonObject
+        {
+            ["type"] = EventNames.OutputAudioVisemes,
+            ["event_id"] = NewEventId(),
+            ["response_id"] = responseId,
+            ["item_id"] = itemId,
+            ["output_index"] = outputIndex,
+            ["content_index"] = 0,
+            ["visemes"] = payload,
+        };
+    }
 
     public static JsonObject OutputAudioDone(string responseId, string itemId, int outputIndex = 0)
         => new()

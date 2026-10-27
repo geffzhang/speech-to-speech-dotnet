@@ -23,6 +23,7 @@
     <ProjectReference Include="..\SpeechToSpeech.Backends.QwenTts\SpeechToSpeech.Backends.QwenTts.csproj" />
     <ProjectReference Include="..\SpeechToSpeech.Backends.OpenAiCompatible\SpeechToSpeech.Backends.OpenAiCompatible.csproj" />
     <ProjectReference Include="..\SpeechToSpeech.Backends.SmartTurn\SpeechToSpeech.Backends.SmartTurn.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Backends.OpenLipSync\SpeechToSpeech.Backends.OpenLipSync.csproj" />
   </ItemGroup>
 
 </Project>

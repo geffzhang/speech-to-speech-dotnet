@@ -223,7 +223,6 @@ internal static class OptionsBuilder
         // 组合非法就在启动时失败。上游在 VADHandler.__init__ 里抛，那是启动路径；
         // 本实现的 handler 是每条连接懒建的，等到那时才报错等于「连上来才知道配置错了」。
         turnEnd.Validate();
-
         // 判定器在启动路径构造（上游在 VADHandler.__init__，时机更晚但同为「用之前」）。
         // 缺模型不算致命：打告警、走 disabled 分支——与上游「用户显式关掉」行为一致，
         // 但必须说出来（差异账 D018：上游缺模型会在启动时直接抛 FileNotFoundError）。
@@ -244,6 +243,36 @@ internal static class OptionsBuilder
             }
         }
 
+        // 口型提取。上游是 --enable_visemes + --stv_model_name（HF 仓库名）；
+        // 本构建的引擎吃本地 ONNX 目录，所以参数换成 --stv_model_dir，
+        // 另认 SPEECH_TO_SPEECH_VISEME_MODEL_DIR（与端到端测试同一个环境变量）。
+        bool visemesEnabled = line.BoolFlag(false, "enable_visemes", "no_enable_visemes");
+        var stv = new StvOptions
+        {
+            Enabled = visemesEnabled,
+            ModelDirectory = line.Value("stv_model_dir", "stv-model-dir")
+                             ?? Environment.GetEnvironmentVariable("SPEECH_TO_SPEECH_VISEME_MODEL_DIR")
+                             ?? (visemesEnabled ? Path.Combine("models", "viseme") : null),
+            ConfigPath = line.Value("stv_config_path", "stv-config-path"),
+        };
+
+        stv.Validate();
+
+        // 打开口型却在启动时找不到模型：直接失败。上游此时抛 FileNotFoundError，
+        // 而「开了口型但永远没有 visemes 事件」会让客户端以为自己的解析坏了。
+        if (stv.Enabled)
+        {
+            string modelPath = Path.Combine(stv.ModelDirectory!, "model.onnx");
+            string configPath = stv.ConfigPath ?? Path.Combine(stv.ModelDirectory!, "config.json");
+            if (!File.Exists(modelPath) || !File.Exists(configPath))
+            {
+                throw new BackendUnavailableException(
+                    "openlipsync",
+                    $"启用口型提取但模型未就位（需要 {modelPath} 与 {configPath}）；" +
+                    "用 --stv_model_dir 指定目录，或去掉 --enable_visemes");
+            }
+        }
+
         return new BackendContext
         {
             Vad = vad,
@@ -252,6 +281,7 @@ internal static class OptionsBuilder
             Tts = tts,
             TurnEnd = turnEnd,
             TurnEndClassifier = turnEndClassifier,
+            Stv = stv,
             // 标志开着就先预热（上游同口径），否则第一次用语言识别时才加载模型。
             LanguageDetector = new LazyLanguageDetector(preload: detectLlmOutputLanguage),
             DetectLlmOutputLanguage = detectLlmOutputLanguage,

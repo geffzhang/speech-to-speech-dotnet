@@ -33,12 +33,36 @@ public sealed class OpenLipSyncBackend : IDisposable
     public int SampleRate => _inputSampleRate;
     public string LastError { get; private set; } = "";
 
+    /// <summary>
+    /// 一个 mel 帧的时长（秒）。区间时间线的量化步长：hop / 模型采样率（通常 160/16000 = 10 ms）。
+    /// </summary>
+    public double FrameDurationSeconds
+        => _audioConfig is { HopLengthSamples: > 0, SampleRate: > 0 } config
+            ? (double)config.HopLengthSamples / config.SampleRate
+            : 0.01;
+
     // 调试计数
     public int DebugMelFramesProduced { get; private set; }
     public int DebugInferenceRuns { get; private set; }
 
     /// <summary>任一上下文每算完一个 mel 帧触发（平滑后输出快照）。测试缝与逐帧消费用。</summary>
     public event Action<float[]>? VisemeFrameComputed;
+
+    /// <summary>
+    /// 为某个上下文单独安装逐帧回调，取代后端级 <see cref="VisemeFrameComputed"/>。
+    ///
+    /// 口型提取按连接各用一个上下文：走后端级事件会让并发连接的帧串到一起。
+    /// </summary>
+    internal bool SetFrameObserver(long context, Action<float[]>? observer)
+    {
+        if (!_contexts.TryGetValue(context, out var audioContext))
+        {
+            return false;
+        }
+
+        audioContext.OnFrameComputed = observer;
+        return true;
+    }
 
     /// <summary>从模型字节与 config JSON 初始化。</summary>
     public bool InitializeFromBytes(int sampleRate, byte[] modelBytes, string configJson)

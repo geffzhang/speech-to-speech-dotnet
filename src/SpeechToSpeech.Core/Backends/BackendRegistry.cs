@@ -32,6 +32,9 @@ public sealed class BackendContext
     public required LlmOptions Llm { get; init; }
     public required TtsOptions Tts { get; init; }
 
+    /// <summary>口型提取（STV）参数。默认关闭，关闭时管线里不加这一级。</summary>
+    public StvOptions Stv { get; init; } = new();
+
     /// <summary>
     /// 端点判定与投机轮次配置（<c>speculative_reopen_ms</c> / <c>unanswered_reopen_ms</c> /
     /// <c>smart_turn*</c>）。上游这几项挂在 VAD 参数对象上，本实现单独一组以免
@@ -80,6 +83,9 @@ public static class BackendRegistry
     private static readonly Dictionary<string, Func<BackendContext, ISttBackend>> SttFactories = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, Func<BackendContext, ILanguageModelBackend>> LlmFactories = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, Func<BackendContext, ITtsBackend>> TtsFactories = new(StringComparer.Ordinal);
+
+    /// <summary>口型提取后端工厂（单实现，见 <see cref="RegisterViseme"/>）。</summary>
+    private static Func<BackendContext, IVisemeExtractor>? VisemeFactory;
 
     /// <summary>STT 后端清单，顺序与上游一致。</summary>
     public static IReadOnlyList<BackendSpec> SttBackends { get; } =
@@ -180,6 +186,18 @@ public static class BackendRegistry
         }
     }
 
+    /// <summary>
+    /// 注册口型提取后端。与 VAD/STT/LLM/TTS 不同，它只有一条实现（OpenLipSync），
+    /// 上游也只有一条（wav2vec2 STV）——所以这里是单工厂而不是名字表。
+    /// </summary>
+    public static void RegisterViseme(Func<BackendContext, IVisemeExtractor> factory)
+    {
+        lock (Gate)
+        {
+            VisemeFactory = factory;
+        }
+    }
+
     // ── 创建 ──────────────────────────────────────────────────────────
 
     public static IVadBackend CreateVad(string name, BackendContext context)
@@ -235,6 +253,33 @@ public static class BackendRegistry
         }
 
         throw new BackendUnavailableException(name, spec.UnsupportedReason ?? "该后端没有注册工厂");
+    }
+
+    /// <summary>
+    /// 按配置构造口型提取后端。未启用时返回 null（管线里不加这一级）。
+    ///
+    /// 启用了却拿不到工厂属于配置错误：宁可启动/连线时报错，也不能静默变成
+    /// 「打开了口型但永远没有 visemes 事件」——客户端会以为自己的解析坏了。
+    /// </summary>
+    public static IVisemeExtractor? CreateViseme(BackendContext context)
+    {
+        if (!context.Stv.Enabled)
+        {
+            return null;
+        }
+
+        Func<BackendContext, IVisemeExtractor>? factory;
+        lock (Gate)
+        {
+            factory = VisemeFactory;
+        }
+
+        if (factory is null)
+        {
+            throw new BackendUnavailableException("openlipsync", "口型提取后端未注册工厂");
+        }
+
+        return factory(context);
     }
 
     /// <summary>按名字查找后端；未知名字列出全部合法取值（对齐上游的报错形态）。</summary>

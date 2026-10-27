@@ -124,6 +124,13 @@ public sealed class RealtimeConnection : IAsyncDisposable
     private readonly BlockingCollection<object> _ttsOut = new(new ConcurrentQueue<object>(), 512);
     private readonly BlockingCollection<object> _textEvents = new(new ConcurrentQueue<object>(), 512);
 
+    /// <summary>
+    /// 口型级输入队列。仅在启用 <c>--enable_visemes</c> 时创建：那时 TTS 的输出去这里，
+    /// 由 <c>StvHandler</c> 重分块后写进 <see cref="_ttsOut"/>（上游同样把
+    /// <c>tts_output_queue</c> 换成中间队列）。关闭时为 null，发送路径与未接口型时逐字节相同。
+    /// </summary>
+    private BlockingCollection<object>? _stvIn;
+
     private readonly CancellationTokenSource _stopping = new();
     private readonly List<Thread> _threads = [];
     private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -346,7 +353,23 @@ public sealed class RealtimeConnection : IAsyncDisposable
             token, _lmOut, _ttsIn, _textEvents, _cancelScope, _speculativeTurns,
             new AssistantLanguageProbe(_backends.LanguageDetector),
             _backends.DetectLlmOutputLanguage).Run());
-        AddThread("tts", () => new TtsHandler(token, _ttsIn, _ttsOut, tts, _cancelScope, _speculativeTurns, _latency).Run());
+
+        // 口型级：开启时它是 TTS 与发送循环之间的一级（上游 enable_visemes 的同一处插入）。
+        // 关闭时整级不存在——AudioOutput.Visemes 无生产者，visemes 事件永不发出。
+        var visemeExtractor = BackendRegistry.CreateViseme(_backends);
+        var ttsOutput = visemeExtractor is null ? _ttsOut : new BlockingCollection<object>(new ConcurrentQueue<object>(), 256);
+        if (visemeExtractor is not null)
+        {
+            _stvIn = ttsOutput;
+        }
+
+        AddThread("tts", () => new TtsHandler(token, _ttsIn, ttsOutput, tts, _cancelScope, _speculativeTurns, _latency).Run());
+        if (visemeExtractor is not null)
+        {
+            var extractor = visemeExtractor;
+            AddThread("stv", () => new StvHandler(
+                token, ttsOutput, _ttsOut, extractor, _cancelScope, _backends.Tts.SampleRate).Run());
+        }
 
         foreach (var thread in _threads)
         {
@@ -375,7 +398,16 @@ public sealed class RealtimeConnection : IAsyncDisposable
 
     private async Task ShutdownPipelineAsync()
     {
-        foreach (var queue in new[] { _audioIn, _vadOut, _sttOut, _lmIn, _lmOut, _ttsIn })
+        List<BlockingCollection<object>> queues =
+        [
+            _audioIn, _vadOut, _sttOut, _lmIn, _lmOut, _ttsIn,
+        ];
+        if (_stvIn is not null)
+        {
+            queues.Add(_stvIn);
+        }
+
+        foreach (var queue in queues)
         {
             try
             {
@@ -400,7 +432,9 @@ public sealed class RealtimeConnection : IAsyncDisposable
             thread.Join(remaining);
         }
 
-        foreach (var queue in new[] { _audioIn, _vadOut, _sttOut, _lmIn, _lmOut, _ttsIn, _ttsOut, _textEvents })
+        queues.Add(_ttsOut);
+        queues.Add(_textEvents);
+        foreach (var queue in queues)
         {
             queue.Dispose();
         }
@@ -1634,6 +1668,23 @@ public sealed class RealtimeConnection : IAsyncDisposable
         // output_audio 内容片的两面。
         var pending = CurrentTextOutput();
         await EnsureTextItemAsync(responseId);
+
+        // 口型是「先元数据、后音频」：上游在 begin_audio_output 之后把 visemes 事件连同
+        // 这一批音频一起发，并在发完后重新校验响应仍在——发事件会让出给取消与会话释放，
+        // 陈旧音频不能借这条事件把已经收口的响应重新打开。
+        if (audio.Visemes.Count > 0)
+        {
+            await SendAsync(ServerEvent.Serialize(
+                ServerEvent.OutputAudioVisemes(responseId, pending.ItemId, audio.Visemes, pending.OutputIndex)));
+
+            if (audio.CleanupOnly
+                || _cancelScope.IsDiscardable(audio.CancelGeneration)
+                || _activeResponseId is null
+                || responseId != _activeResponseId)
+            {
+                return;
+            }
+        }
 
         await _transport.SendAudioChunkAsync(responseId, pending.ItemId, pending.OutputIndex, audio.Audio);
 

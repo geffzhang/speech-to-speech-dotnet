@@ -1,5 +1,6 @@
 using SpeechToSpeech.Backends.ManySpeech;
 using SpeechToSpeech.Backends.OpenAiCompatible;
+using SpeechToSpeech.Backends.OpenLipSync;
 using SpeechToSpeech.Backends.QwenTts;
 using SpeechToSpeech.Backends.TensorSharp;
 using SpeechToSpeech.Cli.Audio;
@@ -104,6 +105,7 @@ internal static class Program
         TensorSharpBackends.Register();
         QwenTtsBackends.Register();
         OpenAiCompatibleBackends.Register();
+        OpenLipSyncBackends.Register();
     }
 
     /// <summary>

@@ -104,6 +104,37 @@ public sealed class TtsOptions
     public int MaxConcurrency { get; init; } = 1;
 }
 
+/// <summary>
+/// 口型提取（STV）参数。
+///
+/// 上游对应 <c>--enable_visemes</c> / <c>--stv_model_name</c> / <c>--stv_device</c>。
+/// 本构建的引擎是 OpenLipSync（ONNX Runtime，CPU），没有 device 选择；
+/// 模型来源是本地目录而不是 HF 仓库名（引擎差异见差异账 D031 / C033）。
+///
+/// **默认关闭**：不打开时管线里根本不存在这一级，<c>AudioOutput.Visemes</c> 无生产者、
+/// 不发 <c>speech_to_speech.output_audio.visemes</c> 事件——与上游 <c>enable_visemes=False</c> 同形。
+/// </summary>
+public sealed class StvOptions
+{
+    /// <summary>对应上游 <c>--enable_visemes</c>，默认关。</summary>
+    public bool Enabled { get; init; }
+
+    /// <summary>模型目录（<c>model.onnx</c> + <c>config.json</c>）。</summary>
+    public string? ModelDirectory { get; init; }
+
+    /// <summary>config.json 覆盖路径；null 表示用 <see cref="ModelDirectory"/> 下的。</summary>
+    public string? ConfigPath { get; init; }
+
+    /// <summary>打开口型却没有模型目录——启动时就要失败，不能等到第一次合成才发现。</summary>
+    public void Validate()
+    {
+        if (Enabled && string.IsNullOrWhiteSpace(ModelDirectory))
+        {
+            throw new ArgumentException("启用口型提取（--enable_visemes）必须给出 --stv_model_dir");
+        }
+    }
+}
+
 /// <summary>VAD 帧类型。</summary>
 public enum VadFrameKind
 {
