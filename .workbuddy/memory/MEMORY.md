@@ -3,54 +3,42 @@
 ## 定位
 
 `huggingface/speech-to-speech` 的 C# 行为等价重写。参照物锁定 `0835002`，`net10.0`。
-验收标准是**可观察行为一致**，不是编译通过。任何不一致必须进 `porting/differences.jsonl` 并编号。
+验收是**可观察行为一致**。任何不一致进 `porting/differences.jsonl` 编号；四本账在 `porting/`（02-differences 由 `diff_register.py render` 生成，**不要手改**）。动工前 `reference_lock.py check`。
 
-## 依赖策略
+## 依赖与参考
 
-**一律走 NuGet，不挂本地工程引用。** 即使参考仓库在本机（`C:\workshop\github\*`），也只取 API 形态与行为语义，落地用正式版包。理由：构建可复现，不受参考仓库工作区状态影响。
+- **一律 NuGet 正式版**，不挂本地工程引用；预发布包不进默认构建。已用：ManySpeech.SileroVad 1.1.2 / WhisperAsr 1.0.1 / AliParaformerAsr 1.1.9 / TensorSharp.Chat 2026.10.11 / ElBruno.QwenTTS 1.10.2 / NAudio(+Alsa) 3.3.0 / NAudio.Core 3.3.0（OpenAiCompatible 直引，WDL sinc 重采样内核）/ SIPSorcery 10.0.17 / Concentus 2.2.2（Opus，工厂返回 IOpusEncoder/IOpusDecoder，Span 编码签名带 frame_size）。
+- 同域参考（只取工程形态不取行为语义）：`C:\workshop\github\ElBruno.Realtime`（8662db1）、tryAGI.WebRTC（e64acf3）、`C:\workshop\github\Aurio`（重采样内核参考；其 NAudioWdlResampler 用 interp=true 实为线性插值，本实现取托管内核思路改用 sinc 模式）。SIPSorcery.OpenAI.Realtime 仅形态参照（BY-NC-SA 不可作依赖）。
 
-已用：`ManySpeech.SileroVad 1.1.2` / `ManySpeech.WhisperAsr 1.0.1` / `ManySpeech.AliParaformerAsr 1.1.9` / `TensorSharp.Chat 2026.10.11` / `ElBruno.QwenTTS 1.10.2` / `NAudio 3.3.0` / `NAudio.Alsa 3.3.0`。
-**预发布包不进默认构建**（如 `NAudio.MacOS` 只有 preview）——宁可缺功能 + 明确报错，不赌破坏性变更。
+## 核心纪律
 
-## 核心语义纪律
+- 错误是数据不是异常；取消代际 32 位回绕，丢弃判据=代际合取；新增后端带 `UnsupportedReason` 不静默降级。
+- 构建 0 警告 0 错误；**不并行 build+test**（CS2001）。
+- 状态机类改动：先核对**调用点**再核对断言；第二轮/打断缺陷先二分「后端吐没吐事件」再查状态机。
 
-- **错误是数据不是异常**：`TranscriptionFailure` / `EndOfResponse.Error`，不 throw
-- **取消代际**：`CancelScope` 用 32 位回绕 `Interlocked.Exchange`；迟到完成不得清 discarding 保护
-- **投机会话**：`ResponsePrefetchTransaction` 未认领即丢弃，永不写历史
-- **内部事件名 vs 线上协议名分离**：映射只在一处
-- 新增后端必须带 `UnsupportedReason`，**不静默降级**
+## 层级陷阱速查（细节见各日 log 与账本）
 
-## 音频层（易踩）
+- **音频**：`AudioDevices.cs` 集中平台后端；WasapiRecorder 非 IWavIn；ClientWebSocket 禁并发 Send（入队+单消费者）；ManySpeech OnlineVad 每段一条流（C023），驱动 `IsFinished(isEndpoint:true)`+`GetResult(stream)`；脚本推流三要素=真实时长 20ms 帧+尾补 1.5s 静音+proxy=None。
+- **协议**：`ServerEvent.Serialize` 用 `WireJson`（自写 RelaxedJsonEncoder，不用 UnsafeRelaxedJsonEscaping——emoji/+/中文会偏，C012/C017）；探针必须调产品序列化入口；`ResolveVoice` 一处定义喂两处；BuildResponse 唯一产地；status_details 任何终态都发；HashSet 无序，FIFO 要 +Queue。
+- **turns/时延**：语料三前提=自包含+时钟可注入（`Func<double>`）+纯量返回；浮点 6 位定长字符串绝不用容差；复开窗口=三值取 max；时延账按 response_key；hold_s 区间并集；metadata 是逐字符字符串（Utf8JsonWriter 手写）；round 9 只用于 vad_decision_s/hold_s；先 build 再 pop；日志走 stderr。
+- **HOLD 宽限**：算出来≠生效——输出侧逐片阻塞等、输入侧只等 ProcessingDeadline；陈旧收尾照发 done(Succeeded=false)；丢弃修订要 DiscardPendingTurn。
+- **测量点**：vad_decision_s 锚=最后有声窗；disabled 只写 status；接线不进语料（单测锁「谁写账本」）。
+- **Smart Turn**：ORT 钉 1.31.0（版本敏感差 0.12）；CT 跨步 25 取样；do_normalize=零均值单位方差；窗口尾 8s 前补零；判定与决策分离。
+- **语言层**：lingua-py ↔ lingua-rs 互证；一轮只解析一次；关掉检测仍观察写回。
 
-- 平台后端集中在 `src/SpeechToSpeech.Cli/Audio/AudioDevices.cs`，其它地方只认 `IWaveIn` / `IWavePlayer`
-- **`WasapiRecorder` 未实现 `IWaveIn`**，只能留在 `WaveIn`；播放可用 `WasapiPlayer`
-- `ClientWebSocket` 不允许并发 `Send`：麦克风回调只入队，重采样与发送交给单消费者
-- WinMM 类型带 `[SupportedOSPlatform("windows")]`，新代码调用需 OS 守卫，否则 CA1416
+## 真跑
 
-## 构建纪律
+- `serve`+`tools/smoke/`：serve_smoke（完整说话时间线）、oob_smoke/oob_leak_probe（历史污染两招）、tool_call_smoke（llama-server 真链）、error_shape_smoke、**webrtc_smoke（aiortc 互证，D003）**。
+- 冒烟脚本的 HTTP 用 ProxyHandler({})（Windows 系统代理劫持 127.0.0.1，D029 镜像）；后台服务用 run_in_background。
+- 模型：VAD=ModelScope `silero-vad-v5-onnx`；TTS/LLM 走 hf-mirror resolve/main+Range 断点；TensorSharp 用 `qwen35`（无 qwen2）。
 
-- **不要并行跑 `dotnet build` 与 `dotnet test`**，会互删 `obj/*.AssemblyInfo.cs` 报 CS2001
-- 目标是 0 警告 0 错误：`CA2007`/`CA1031` 的抑制是有意识的（与上游异常处理语义冲突），新增告警要逐条判断而非直接加 `NoWarn`
+## WebRTC（D003 resolved，2026-10-27）
 
-## 账本
+- 架构：`SessionTransport` 抽象+门控（TransportGate）；SIPSorcery `WebRtcSession`（datachannel "oai-events"+Opus 48k RTP+ICE env `SPEECH_TO_SPEECH_ICE_SERVERS`）；`WebRtcCallEndpoints`（POST/DELETE /v1/realtime/calls，415 是**子串包含**；503 槽位默认 1=num_pipelines）。
+- Pacer 对齐上游 recv()：首帧即时、不足补零**不限首帧**、追赶用 **ceil** 且只认「等过数据」、Sleep 在途缓存 timestamp（重算会 ceil 跳帧死循环）、音频结束补 5 帧排空。Resampler 绝对输出游标+整数上取整（分块==整块）。
+- session.created：WS 握手后发、WebRTC 由 datachannel onOpen 发（SendSessionCreatedAsync 幂等）。
+- 环回测试教训：offer 的 track 必须与 answer 侧 codec/clock 有交集（PCMU vs OPUS → AudioIncompatible）。
 
-`porting/` 四本账：`00-reference.md`（参照物）· `01-baseline.md`（行为基线）· `02-differences.md`（差异，由 jsonl 渲染，**不要手改**）· `03-acceptance.md`（验收）。
-动工前先跑 `reference_lock.py check`，漂移了先决策再动手。
+## 当前状态（2026-10-27）
 
-## 差分语料
-
-- 目录 `corpus/<层>/`，`<case>.input.json` + `.expected.json`；**基线只能由参照实现 `record`，不能手写**
-- 文本层探针两条：`tools/refprobe/text_probe.py`（上游）/ `tools/TextProbe`（本实现），输出同形 JSON
-- 探针读 stdin 必须绕开 `Console.In`（Windows 按 OEM 代码页解码，UTF-8 中文会乱码），走原始流 + UTF-8
-- 刻意分歧不放进必过语料：用 `payload.split` 这类开关收窄比对面，分歧本身改用**表征单元测试**锁定，并在 README 留上游原始输出作对照
-- 参照实现录制环境：Python 3.13 + `nltk 3.10.4` + `punkt_tab`（数据取自 nltk_data 仓库，**4,319,076 字节**）+ `pillow` + `requests` + `openai 2.28.0`（与上游 pyproject 一致）+ `numpy` + `scipy`，venv 在 `~/.workbuddy/binaries/python/envs/default`
-
-## 协议层
-
-- **上游基线不用起服务**：`RealtimeService` 的 handler 是 `(conn_id, event) -> list[ServerEvent]` 纯函数，直接实例化即可调用，无需模型/网络
-- 探针：`tools/refprobe/protocol_probe.py`（官方 `openai.types.realtime` 模型）/ `tools/ProtocolProbe`（本实现工厂）。两侧 `event_id` 归一化为 `"<event_id>"`，其余逐字节比
-- 审计脚本：`schema_dump.py`（官方 46 种事件 + 必填字段）、`protocol_coverage.py`（事件级覆盖，当前 16/26）
-- **`ServerEvent.Serialize` 必须 `Encoder = UnsafeRelaxedJsonEscaping`**：上游 Starlette `send_json` 用 `ensure_ascii=False`，默认编码器会让中文 3 字节变 6 字节、base64 的 `+` 变 `\u002B`（C012）
-- 探针必须调**产品序列化入口**，不能自己 `ToJsonString()`，否则编码差异测不出来
-- 结构有差异的事件**不进必过语料**（会长期标红），缺口走 `differences.jsonl` + 审计脚本
-
+差异账 60 条：resolved 45 / accepted 12 / gap 3（D005 实时转写、D009 评估套件、E001 macOS——均架构性）。测试 278/278。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default`（含 aiortc 1.15）。

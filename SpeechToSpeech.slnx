@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/SpeechToSpeech.Backends.Lingua/SpeechToSpeech.Backends.Lingua.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.ManySpeech/SpeechToSpeech.Backends.ManySpeech.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.OpenAiCompatible/SpeechToSpeech.Backends.OpenAiCompatible.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.QwenTts/SpeechToSpeech.Backends.QwenTts.csproj" />
+    <Project Path="src/SpeechToSpeech.Backends.SmartTurn/SpeechToSpeech.Backends.SmartTurn.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.TensorSharp/SpeechToSpeech.Backends.TensorSharp.csproj" />
     <Project Path="src/SpeechToSpeech.Cli/SpeechToSpeech.Cli.csproj" />
     <Project Path="src/SpeechToSpeech.Core/SpeechToSpeech.Core.csproj" />
@@ -13,7 +15,12 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/ApiProbe/ApiProbe.csproj" />
+    <Project Path="tools/LanguageProbe/LanguageProbe.csproj" />
     <Project Path="tools/ProtocolProbe/ProtocolProbe.csproj" />
+    <Project Path="tools/SmartTurnProbe/SmartTurnProbe.csproj" />
+    <Project Path="tools/LatencyProbe/LatencyProbe.csproj" />
     <Project Path="tools/TextProbe/TextProbe.csproj" />
+    <Project Path="tools/TurnsProbe/TurnsProbe.csproj" />
+    <Project Path="tools/VadProbe/VadProbe.csproj" />
   </Folder>
 </Solution>

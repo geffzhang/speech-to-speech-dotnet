@@ -5,6 +5,7 @@ using SpeechToSpeech.Backends.TensorSharp;
 using SpeechToSpeech.Cli.Audio;
 using SpeechToSpeech.Core.Backends;
 using SpeechToSpeech.Realtime;
+using SpeechToSpeech.Transport.WebRtc;
 
 namespace SpeechToSpeech.Cli;
 
@@ -22,6 +23,8 @@ internal static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        UseUtf8Console();
+
         try
         {
             var line = CommandLine.Parse(args);
@@ -34,6 +37,7 @@ internal static class Program
 
             RegisterBackends();
             var context = OptionsBuilder.Build(line);
+            WarnIfTurnEndUnavailable(context);
 
             var options = new RealtimeServerOptions
             {
@@ -69,6 +73,31 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// 控制台输出走 UTF-8。
+    ///
+    /// 上游是 Python：PEP 528 让 Windows 控制台也用 UTF-8，所以中文日志在任何终端都正常。
+    /// .NET 在**重定向**时已经是 UTF-8，但直接接控制台时会用系统代码页（简中环境是 936），
+    /// 于是同一条中文告警在 UTF-8 终端里会变成乱码——这不影响管线行为，但会让
+    /// 「缺 Smart Turn 判定器」这类必须被看见的告警恰好读不出来。
+    ///
+    /// 拿不到控制台句柄时（管道已关闭、某些 CI 环境）会抛 IOException，忽略即可：
+    /// 此时输出本来就是重定向的，默认值已经是 UTF-8。
+    /// </summary>
+    private static void UseUtf8Console()
+    {
+        try
+        {
+            Console.OutputEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        }
+        catch (IOException)
+        {
+        }
+        catch (PlatformNotSupportedException)
+        {
+        }
+    }
+
     private static void RegisterBackends()
     {
         ManySpeechBackends.Register();
@@ -77,10 +106,30 @@ internal static class Program
         OpenAiCompatibleBackends.Register();
     }
 
+    /// <summary>
+    /// Smart Turn 默认开启（照上游）。判定器构造失败（缺模型、加载失败）已在参数装配时
+    /// 打过告警并退回 disabled；这里兜的是「连 <see cref="BackendContext"/> 都没拿到判定器」
+    /// 的其它路径。这条差异必须在启动时说出来——它不会报错、不会丢数据，
+    /// 只会让助手偶尔抢话，事后从日志里也查不出来。
+    /// </summary>
+    private static void WarnIfTurnEndUnavailable(BackendContext context)
+    {
+        if (!context.TurnEnd.Enabled || context.TurnEndClassifier is not null)
+        {
+            return;
+        }
+
+        Console.Error.WriteLine(
+            "warning: Smart Turn 已启用但没有可用判定器（差异账 D018）：" +
+            $"端点判定按 disabled 处理，输出宽限 {context.TurnEnd.SpeculativeReopenMs}ms、处理延迟 0。" +
+            "用户说到一半停顿时回复可能提前放行。加 --no_smart_turn 可显式关掉本条告警。");
+    }
+
     private static async Task<int> ServeAsync(RealtimeServerOptions options, BackendContext context)
     {
         var server = new RealtimeServer(options, context);
         var app = server.Build();
+        app.MapWebRtcCalls(options, context);
 
         using var shutdown = new CancellationTokenSource();
         Console.CancelKeyPress += (_, eventArgs) =>

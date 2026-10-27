@@ -15,10 +15,13 @@
   <ItemGroup>
     <ProjectReference Include="..\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
     <ProjectReference Include="..\SpeechToSpeech.Realtime\SpeechToSpeech.Realtime.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Transport.WebRtc\SpeechToSpeech.Transport.WebRtc.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Backends.Lingua\SpeechToSpeech.Backends.Lingua.csproj" />
     <ProjectReference Include="..\SpeechToSpeech.Backends.ManySpeech\SpeechToSpeech.Backends.ManySpeech.csproj" />
     <ProjectReference Include="..\SpeechToSpeech.Backends.TensorSharp\SpeechToSpeech.Backends.TensorSharp.csproj" />
     <ProjectReference Include="..\SpeechToSpeech.Backends.QwenTts\SpeechToSpeech.Backends.QwenTts.csproj" />
     <ProjectReference Include="..\SpeechToSpeech.Backends.OpenAiCompatible\SpeechToSpeech.Backends.OpenAiCompatible.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Backends.SmartTurn\SpeechToSpeech.Backends.SmartTurn.csproj" />
   </ItemGroup>
 
 </Project>
