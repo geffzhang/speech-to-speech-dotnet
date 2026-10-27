@@ -84,8 +84,9 @@
 - **非阻塞**：`DiarizationHandler` 在 VAD 之前（要连续音频），有界 `Channel` + 单 worker，**队列满=时间轴缺口**（`NotifyGap`，`_pendingGap` 专职上报而 `_droppedSamples` 保持累计）。
 - **模型**：`models/pyannote-segmentation/model.onnx`（sherpa 导出 5,992,913 B，SHA-256 `220ad67c…`），不入库。冒烟 `tools/DiarizationProbe`（`--metadata` / `--pcm` 裸 f32 16k / `--window` 缩短窗）。真值：一窗 589 帧、静音 0 活跃、真人语音 501/589 活跃且 2 通道点亮、两次推理逐位相同、3s 窗前瞻 4.51→1.35s。
 - **声纹（D033 resolved）**：`src/SpeechToSpeech.Backends.SpeakerEmbedding` = `KaldiFbank`（25ms/10ms、povey、**snip_edges=false 单边镜像**、512 FFT、80 mel 20~7600、log 前用 **`FLT_EPSILON`(1.1920929e-7) 不是 `float.Epsilon`**、global-mean）+ `OnnxSpeakerEmbedding`（3D-Speaker CAM++，metadata 全读、输出 L2 单位化、**不做内部重采样**）。模型 `models/speaker-embedding/model.onnx`（28,281,164 B，SHA-256 `aa3cfc16…`）。口径取自 sherpa-onnx —— 参照实现这一层是空的。
+- **跨窗口认亲（C037 resolved）**：**不按起点帧、不按通道号**——两者都是窗口内量（起点抖 3–8 帧；powerset 通道号排列无关，同一句话四个窗口 2→1→2→1）。身份只能按**音频时间重叠**（`Associate` 取重叠最多者）。次级判据：同窗同时=真重叠（各成段）；换通道要**验声**（`CosineDistance` ≤ `MatchThreshold`）；短于 `MinSpeechDuration` 的碎片被整段盖住时并入。删了 `_channelMap`。真跑 16 段/29.09 s → **6 段/14.44 s、重叠 0**。
 - **三个真缺陷教训**：① scratch 复用 + `CopyTo` 按**目标长度**复制 → 短段声纹夹带后续音频（向量趋同→只剩 1 人）；② `Associate` 只在 `StartFrame==0` 查通道映射 → 同轮次被多窗口重复建段（段总时长 > 音频本身）；③ C036 凹陷判据 `0.7×onset` 在真实概率（换人处约 0.40）上永不成立 → 双人被缝成一段。修法：传本段长度 / 不论起点都先认亲 / 删 `Offset` 只按 `Onset`。
 
 ## 当前状态（2026-10-27）
 
-差异账 71 条：resolved 54 / accepted 17 / **gap 0**。测试 467/467。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy、**kaldi-native-fbank + onnxruntime**——fbank/embedding 对拍参照）。
+差异账 72 条：resolved 55 / accepted 17 / **gap 0**。测试 470/470。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy、**kaldi-native-fbank + onnxruntime**——fbank/embedding 对拍参照）。
