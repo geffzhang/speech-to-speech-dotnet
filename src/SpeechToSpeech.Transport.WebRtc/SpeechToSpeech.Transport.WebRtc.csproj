@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpeechToSpeech.Transport.WebRtc</RootNamespace>
+    <Description>WebRTC 传输（SIPSorcery）：SDP 协商、oai-events 数据频道、Opus 48kHz paced RTP 音频。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SpeechToSpeech.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SIPSorcery" Version="10.0.17" />
+    <!-- Opus 编解码走 Concentus（纯托管，无原生资产，容器/跨平台零障碍）。
+         SIPSorcery 官方的 OpenAI.Realtime 包同样用 Concentus，兼容性有背书。 -->
+    <PackageReference Include="Concentus" Version="2.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpeechToSpeech.Realtime\SpeechToSpeech.Realtime.csproj" />
+  </ItemGroup>
+
+</Project>
