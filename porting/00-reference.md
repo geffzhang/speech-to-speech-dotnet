@@ -33,7 +33,6 @@
 > 见差异账 E001。
 
 ### 同域参考（设计参考，不参与行为等价，也不是运行时来源）
-
 | 项 | 值 |
 |---|---|
 | 仓库 | `C:\workshop\github\ElBruno.Realtime`（github.com/elbruno/ElBruno.Realtime，MIT） |
@@ -76,7 +75,22 @@
 | 许可 | BSD 3-Clause **+ BY-NC-SA 附加限制（非商业）**——**不可作依赖**，仅形态参照 |
 | 定位 | SIPSorcery 官方的 OpenAI Realtime WebRTC **客户端**（REST 签名 + `WebRTCEndPoint` + `DataChannelMessenger`） |
 
-参照点：SIPSorcery 10.x 的 PeerConnection 组装与 Opus 收发的**官方用法**；**Opus 编解码用 Concentus 2.2.2（纯托管）**——本实现沿用此选型替代 SIPSorceryMedia.Encoders（原生 libopus，容器需多平台原生资产）；`DataChannelMessenger` 的事件序列化分层。另注意它是 OpenAI **客户端**（浏览器 ← ASP.NET 桥 → OpenAI 的形态在 BrowserBridge 示例），本实现是对端**服务端**，方向相反。
+
+### STV 同域参考（BasisVR/Basis——D031 口型引擎的移植来源）
+
+| 项 | 值 |
+|---|---|
+| 仓库 | `github.com/BasisVR/Basis`（Apache-2.0；开源 VR 社交框架，Unity/C#） |
+| 参考路径 | `Basis/Packages/com.basis.openlipsync/Runtime/Ported/`（MIT，纯 C# 推理核，无 Unity 依赖） |
+| 锁定版本 | developer 分支 `acfca6b`（2026-10-27） |
+| 模型 | `model.onnx.bytes`（10.7 MB，TCN 流式口型模型）+ `config.json`（mel 几何/流式 cache 形状/校准指标），随包发布；资产不入库，落 `models/viseme/` |
+| 定位 | OVR LipSync 兼容的**音频→口型**推理：环形缓冲 → 48 tap Blackman-sinc 多相重采样 → Hann/HTK mel 前端 → 缓存式 TCN（ONNX Runtime，cache_* 乒乓 IoBinding，一 hop 一帧）→ 双极点平滑器（趋势外推消群延迟） |
+
+参照点（**行为语义参与移植**——mel/FFT/重采样/平滑与参照逐值对拍，不同于仅取工程形态的同域参考）：
+音频分块语义、mel 滑动窗因果对齐、multi-label sigmoid 激活、`StateUnchanged` 静默跳帧。
+口型集合差异（OVR 15 → MS 21）与产出方式差异登记 C033，wire 契约保持上游 MS21 区间形状（D009）。
+
+参照点（SIPSorcery）：SIPSorcery 10.x 的 PeerConnection 组装与 Opus 收发的**官方用法**；**Opus 编解码用 Concentus 2.2.2（纯托管）**——本实现沿用此选型替代 SIPSorceryMedia.Encoders（原生 libopus，容器需多平台原生资产）；`DataChannelMessenger` 的事件序列化分层。另注意它是 OpenAI **客户端**（浏览器 ← ASP.NET 桥 → OpenAI 的形态在 BrowserBridge 示例），本实现是对端**服务端**，方向相反。
 
 ## 同步策略
 

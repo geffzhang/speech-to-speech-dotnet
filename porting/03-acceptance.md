@@ -364,3 +364,26 @@ C031（音频解码/重采样内核差异，accepted）、C032（HF 云工作流
 
 账本动作：E001 翻 resolved。差异账 **64 条（resolved 48 / accepted 15 / gap 1）**，
 gap 仅剩口型/分离（D009）。测试 **381/381**（+3），全解决方案 0 警告 0 错误。
+
+### 口型提取引擎（2026-10-27，D031 收口）
+
+D009 的口型部分拆层推进：推理引擎层本轮落地（D031），管线接线与说话人分离留在 D009
+（gap 维持，显式缺口不静默）。验收分三层：
+
+1. **跨实现互证（前端数值）**：mel/FFT 参照值由参照环境（CPython 3.13 + NumPy）按 Basis
+   config 的前端几何逐项直算——同一确定性信号下，C# 前端与 NumPy 参照的 dB 值逐 bin 一致
+   （≤0.05 dB，含近底噪 bin）。关键语义差异被测试钉死：Basis 的 mel 滑动窗是因果对齐
+   （prev=240 零起步，窗口 = prev 240 + 新 hop 160），不是 librosa 式居中分帧。
+2. **行为学单测**：重采样块边界不变性（任意块边界==整块，位级）与频率保持（过零率）；
+   平滑器对常值输入无偏收敛、Reset 回 sil 静息位、α 钳制；multi-label sigmoid 与 softmax
+   两种激活；OVR→MS 映射表锁定；帧序列→区间合并（argmax + 相邻同 id 合并 + 偏移）。
+3. **ONNX 端到端（模型门控）**：流式不变性——整段喂与任意块边界喂的逐帧概率必须一致
+   （TCN 缓存语义）；由 `SPEECH_TO_SPEECH_VISEME_MODEL_DIR` 门控（模型资产 10.7 MB 不入库，
+   落 `models/viseme/`，来源与许可见 00-reference 的 Basis 小节）。
+
+账本动作：D009 缩窄为「口型管线接线 + 流式说话人分离」（gap 维持）；新增 D031（口型引擎，
+resolved）、C033（口型集合 OVR15→MS21 与产出方式差异，accepted）。
+差异账 **66 条（resolved 49 / accepted 16 / gap 1）**，gap 仅剩 D009（接线 + 分离）。
+测试 **401/401**（+20），全解决方案 0 警告 0 错误。Core 侧 `Viseme` record 修正为上游形状
+`{viseme 0-21, start_s, end_s}`（此前是错误脚手架 `(Value, OffsetSeconds, DurationSeconds)`，
+无消费者，安全改形）。
