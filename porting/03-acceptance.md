@@ -207,7 +207,10 @@
       `waited_for_audio` 判据、5 帧编码器排空、重采样绝对输出游标使分块喂入等价于整块）。
       验证：pacer/resampler 表征单测 10、门控 6、registry+503 体 9、SIPSorcery 进程内环回 5（真 HTTP + 真 SDP/ICE/DTLS/datachannel），
       以及 `tools/smoke/webrtc_smoke.py` 用 aiortc 1.15 跨实现互证 PASS（415 / 201 / 连接 / `session.created` / append 门控 / DELETE）。
-      仍开放的只有 C029（会话 id 前缀 `conn_` vs 上游 `session_`，accepted：对客户端是不透明回传令牌）
+      仍开放的只有 C029（会话 id 前缀 `conn_` vs 上游 `session_`，accepted：对客户端是不透明回传令牌）。
+      **2026-10-27 复跑确认链路此刻可用**（不只是「代码在位」）：`serve --port 8791` + `webrtc_smoke.py` 五项全绿，
+      ICE/DTLS 真的连上（`pc state: connected` → `closed`），`call_id=6e9aac6e…` 走完 201 → datachannel
+      `session.created` → append 门控 → DELETE 200 → 重复 DELETE 404 整条线
 
 ## 未闭合风险
 
