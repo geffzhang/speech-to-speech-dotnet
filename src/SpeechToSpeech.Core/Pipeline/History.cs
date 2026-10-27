@@ -13,7 +13,14 @@ namespace SpeechToSpeech.Core.Pipeline;
 public sealed record Viseme(int VisemeId, double StartSeconds, double EndSeconds);
 
 /// <summary>说话人归属。</summary>
-public sealed record SpeakerAttribution(string SpeakerId, string? Label = null);
+/// <param name="SpeakerId">会话内稳定的说话人标识，形如 <c>speaker_0</c>。</param>
+/// <param name="Label">可选的展示名（说话人分离本身不懂人名，这里留给上层做说话人识别）。</param>
+public sealed record SpeakerAttribution(string SpeakerId, string? Label = null)
+{
+    /// <summary>标签可信度（1.0 新建 / 1−距离 匹配 / 借用减半）。0 表示只知道是说话，不知道是谁。</summary>
+    public double Confidence { get; init; } = 1.0;
+}
+
 
 /// <summary>待定的说话人归属（流式说话人分离在转写完成前尚不确定）。</summary>
 public sealed class PendingSpeakerAttribution

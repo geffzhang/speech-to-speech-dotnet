@@ -52,6 +52,20 @@ public sealed class VadAudio : PipelineMessage
     /// <summary>服务端单调时钟上估计的语音结束时刻，与 gate 年龄分开。</summary>
     public double? SpeechEndAtSeconds { get; init; }
 
+    /// <summary>
+    /// 这一段在会话音频时间轴上的起点与终点，单位秒（VAD 的 <c>audio_start_ms</c> / <c>audio_end_ms</c>）。
+    ///
+    /// <para>它不是「处理时刻」，而是「这段音频落在会话流的哪里」——与流式说话人分离的段同属一根时钟，
+    /// 归因就是在这根时钟上做区间 join。起点缺省为 null（拿不到打点时不编造时间）。</para>
+    /// </summary>
+    public double? AudioStartSeconds { get; init; }
+
+    /// <summary>这一段在会话音频时间轴上的终点，单位秒（含闭合用的尾部静音）。</summary>
+    public double? AudioEndSeconds { get; init; }
+
+    /// <summary>这一段是否有可用的时间轴区间（归因的前提）。</summary>
+    public bool HasAudioSpan => AudioStartSeconds is not null && AudioEndSeconds is not null;
+
     public bool IsProgressive => Mode == "progressive";
     public bool IsFinal => Mode == "final";
 }
@@ -79,6 +93,15 @@ public sealed class Transcription : PipelineMessage
     public string? TurnId { get; init; }
     public int? TurnRevision { get; init; }
     public double? SpeechStoppedAtSeconds { get; init; }
+
+    /// <summary>
+    /// 这句转写所对应的音频区间，单位会话秒——由 VAD 段的 <see cref="VadAudio.AudioStartSeconds"/> /
+    /// <see cref="VadAudio.AudioEndSeconds"/> 带下来。没有两个端点就无从归因，所以缺一即为 null。
+    /// </summary>
+    public double? StartSeconds { get; init; }
+
+    /// <summary>这句转写所对应的音频区间终点，单位会话秒。</summary>
+    public double? EndSeconds { get; init; }
 }
 
 /// <summary>最终 STT 失败且未产生 LLM 输入。</summary>

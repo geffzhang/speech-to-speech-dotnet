@@ -273,6 +273,10 @@ public sealed class VadHandler : BaseHandler<object, object>
                                     TurnId = _turnId,
                                     TurnRevision = _turnRevision,
                                     SpeechEndAtSeconds = _speechEndAtSeconds,
+                                    // 段在会话音频时间轴上的位置。它不是处理时刻，而是这段音频本来落在哪里——
+                                    // 流式分离的段与转写都用它对齐，两边因此共用一个时钟，不必各自记偏移。
+                                    AudioStartSeconds = frame.AudioStartMs / 1000.0,
+                                    AudioEndSeconds = frame.AudioEndMs / 1000.0,
                                 };
                             }
                             else

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using SpeechToSpeech.Audio.Diarization;
 using SpeechToSpeech.Core.Backends;
 
 namespace SpeechToSpeech.Core.Pipeline.Handlers;
@@ -27,6 +28,14 @@ public sealed class SttHandler : BaseHandler<VadAudio, PipelineMessage>
     private readonly SpeculativeTurnTracker _speculativeTurns;
     private readonly TurnLatencyStore? _latency;
 
+    /// <summary>
+    /// 流式分离的段时间线；null 表示这次会话不做说话人归属（与上游 <c>speaker_pending is None</c> 同形）。
+    /// 归因在这里做而不是另开一级，是因为上游也在 STT 里解析 <c>speaker_pending</c>：
+    /// 转写与它的音频区间本来就只在这一处同时在场。
+    /// </summary>
+    private readonly SpeakerTimeline? _speakerTimeline;
+    private readonly string _speakerIdPrefix;
+
     public SttHandler(
         CancellationToken stopping,
         BlockingCollection<object> queueIn,
@@ -34,13 +43,17 @@ public sealed class SttHandler : BaseHandler<VadAudio, PipelineMessage>
         ISttBackend backend,
         CancelScope cancelScope,
         SpeculativeTurnTracker speculativeTurns,
-        TurnLatencyStore? latency = null)
+        TurnLatencyStore? latency = null,
+        SpeakerTimeline? speakerTimeline = null,
+        string speakerIdPrefix = "speaker_")
         : base(stopping, queueIn, queueOut)
     {
         _backend = backend;
         _cancelScope = cancelScope;
         _speculativeTurns = speculativeTurns;
         _latency = latency;
+        _speakerTimeline = speakerTimeline;
+        _speakerIdPrefix = speakerIdPrefix;
     }
 
     public override CancelScope CancelScope => _cancelScope;
@@ -141,10 +154,13 @@ public sealed class SttHandler : BaseHandler<VadAudio, PipelineMessage>
                     {
                         Text = final.Text,
                         LanguageCode = final.LanguageCode,
-                        SpeakerAttribution = final.SpeakerAttribution,
+                        // 引擎自己给了说话人就尊重它（会分离的 STT 不该被我们覆盖），否则按段时间线归因。
+                        SpeakerAttribution = final.SpeakerAttribution ?? Attribute(input),
                         TurnId = input.TurnId,
                         TurnRevision = input.TurnRevision,
                         SpeechStoppedAtSeconds = input.SpeechEndAtSeconds,
+                        StartSeconds = input.AudioStartSeconds,
+                        EndSeconds = input.AudioEndSeconds,
                     };
                     break;
 
@@ -153,6 +169,23 @@ public sealed class SttHandler : BaseHandler<VadAudio, PipelineMessage>
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// 把这一段的音频区间与分离器已提交的段做区间 join，得到说话人标签。
+    ///
+    /// <para>规则见 <see cref="SpeakerTimeline.Attribute"/>：重叠最多者胜、并列取先开口的、
+    /// 还没被覆盖就借用紧邻前一位。这里只负责把结果拼成对外的形状：分离器判不出来时返回 null
+    /// （转写照发、字段缺失），而不是编一个 id 出来。</para>
+    /// </summary>
+    private SpeakerAttribution? Attribute(VadAudio input)
+    {
+        if (_speakerTimeline is null || !input.HasAudioSpan) return null;
+
+        var result = _speakerTimeline.Attribute(input.AudioStartSeconds!.Value, input.AudioEndSeconds!.Value);
+        if (result.Speaker == SpeakerSegmentUpdate.UnknownSpeaker) return null;
+
+        return new SpeakerAttribution(_speakerIdPrefix + result.Speaker) { Confidence = result.Confidence };
     }
 
     protected override void Cleanup() => _backend.Dispose();

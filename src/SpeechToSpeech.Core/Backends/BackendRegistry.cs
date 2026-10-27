@@ -1,3 +1,4 @@
+using SpeechToSpeech.Audio.Diarization;
 using SpeechToSpeech.Core.Text;
 
 namespace SpeechToSpeech.Core.Backends;
@@ -34,6 +35,23 @@ public sealed class BackendContext
 
     /// <summary>口型提取（STV）参数。默认关闭，关闭时管线里不加这一级。</summary>
     public StvOptions Stv { get; init; } = new();
+
+    /// <summary>
+    /// 流式说话人分离参数。默认关闭；打开时管线在 VAD 之前加一级分离、并在 STT 里给转写补说话人。
+    /// </summary>
+    public DiarizationOptions Diarization { get; init; } = new();
+
+    /// <summary>
+    /// 帧级说话人分割引擎。与其它后端不同，它不按名字选：只有模型文件一条路（pyannote 系 ONNX）。
+    /// null 表示没有可用实现——此时即使打开了 <see cref="Diarization"/> 也只会在启动时报出来。
+    /// </summary>
+    public ISpeakerMaskSegmentation? SpeakerSegmentation { get; init; }
+
+    /// <summary>
+    /// 声纹引擎（把一段音频压成一个说话人向量）。null 表示没有可用实现——见差异账 D033：
+    /// 上游用模型自带的 speaker cache，本实现走声纹比对，缺它就只缺「同一个人」这一层判断。
+    /// </summary>
+    public ISpeakerEmbedding? SpeakerEmbedding { get; init; }
 
     /// <summary>
     /// 端点判定与投机轮次配置（<c>speculative_reopen_ms</c> / <c>unanswered_reopen_ms</c> /

@@ -1,3 +1,4 @@
+using SpeechToSpeech.Audio.Diarization;
 using SpeechToSpeech.Core.Pipeline;
 using SpeechToSpeech.Core.Runtime;
 
@@ -132,6 +133,123 @@ public sealed class StvOptions
         {
             throw new ArgumentException("启用口型提取（--enable_visemes）必须给出 --stv_model_dir");
         }
+    }
+}
+
+/// <summary>
+/// 流式说话人分离参数（对应上游 <c>--diarization</c> 一组开关）。
+///
+/// **默认关闭**：关掉时管线里根本不存在这一级，转写的 <c>SpeakerAttribution</c> 无生产者——
+/// 与上游 <c>diarization=False</c> 同形。开着却拿不到模型属于配置错误，启动时就失败：
+/// 「打开了分离但永远没有说话人标签」会让客户端以为自己的解析坏了。
+/// </summary>
+public sealed class DiarizationOptions
+{
+    /// <summary>对应上游 <c>--diarization</c>，默认关。</summary>
+    public bool Enabled { get; init; }
+
+    /// <summary>
+    /// 帧级说话人分割模型（pyannote segmentation-3.0 的 ONNX 导出）。
+    /// 上游用 HF 仓库名 + Transformers；本构建吃本地 ONNX 文件。
+    /// </summary>
+    public string? SegmentationModelPath { get; init; }
+
+    /// <summary>ONNX 会话的算子内并行度。</summary>
+    public int ThreadCount { get; init; } = 1;
+
+    /// <summary>
+    /// 说话人活动的概率阈值（上游 <c>--diarization_threshold</c>，默认 0.5）。
+    ///
+    /// 它只给「开」这一侧：关闭阈值取它的 0.7 倍作为滞回带，否则一个卡在阈值上下的轨道会
+    /// 每帧开合一次，把一段话切成几十个碎片（0.7 是参照实现的 onset/offset 比例）。
+    /// </summary>
+    public double Threshold { get; init; } = 0.5;
+
+    /// <summary>
+    /// 模型窗口长度，单位毫秒；<c>0</c> 表示用模型自己的（由 ONNX metadata 给出）。
+    ///
+    /// 取值会向下取整到帧网格，并且**同时**用来构造分割引擎——<c>Analyze</c> 只接受引擎自己声明的长度。
+    /// 缩短窗口是对时延的直接买卖：前瞻是 <c>(window − hop) / 2</c>，pyannote 模型自己的 10 秒窗
+    /// 意味着 4.5 秒前瞻，压到 3 秒窗降到约 1.35 秒，代价是一些准确度。
+    /// </summary>
+    public int WindowMs { get; init; }
+
+    /// <summary>窗口之间的推进量，单位毫秒；<c>0</c> 表示窗口的 10%。</summary>
+    public int HopMs { get; init; }
+
+    /// <summary>「这个轮次是已知说话人」的余弦距离上限。</summary>
+    public double MatchThreshold { get; init; } = 0.45;
+
+    /// <summary>证据充分的轮次超过这个距离就新建说话人。</summary>
+    public double NewSpeakerThreshold { get; init; } = 0.62;
+
+    /// <summary>说话人上限。</summary>
+    public int MaxSpeakers { get; init; } = 10;
+
+    /// <summary>短/低置信轮次可以沿用前一位说话人的时间窗（秒）。</summary>
+    public double ContinuityWindowSeconds { get; init; } = 1.5;
+
+    /// <summary>保留音频上限（秒）——分离器环形缓冲的容量。</summary>
+    public double MaxBufferedSeconds { get; init; } = 60;
+
+    /// <summary>分离队列深度，单位音频块。队列满不是等待，而是一次时间轴缺口。</summary>
+    public int AudioQueueCapacity { get; init; } = 256;
+
+    /// <summary>收尾时等 worker 冲完尾部的时间上限。</summary>
+    public TimeSpan FlushTimeout { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>说话人标识的前缀，拼成 <c>speaker_0</c>（与上游 <c>speaker_{n}</c> 同形）。</summary>
+    public string SpeakerIdPrefix { get; init; } = "speaker_";
+
+    /// <summary>打开分离却没有模型——启动时就失败，不能等到第一条转写才发现没有标签。</summary>
+    public void Validate()
+    {
+        if (Enabled && string.IsNullOrWhiteSpace(SegmentationModelPath))
+        {
+            throw new ArgumentException("启用流式说话人分离（--diarization）必须给出 --diarization_model");
+        }
+
+        if (Threshold is <= 0 or >= 1)
+        {
+            throw new ArgumentException($"分离阈值必须在 (0, 1) 之间；收到 {Threshold}。");
+        }
+    }
+
+    /// <summary>
+    /// 把毫秒配置解成样本数，并按引擎的帧步长取整——窗口与跳长不落在帧网格上，
+    /// 状态机会在构造期拒绝（它是对的：一个不在网格上的 own 区没有意义）。
+    /// </summary>
+    public StreamingDiarizerConfig BuildConfig(ISpeakerMaskSegmentation segmentation)
+    {
+        ArgumentNullException.ThrowIfNull(segmentation);
+        int rate = segmentation.SampleRate;
+
+        return new StreamingDiarizerConfig        {
+            SampleRate = rate,
+            WindowSamples = SnapToFrameGrid(WindowMs, rate, segmentation.FrameShiftSamples),
+            HopSamples = SnapToFrameGrid(HopMs, rate, segmentation.FrameShiftSamples),
+            Onset = Threshold,
+            Offset = Threshold * 0.7,
+            MatchThreshold = MatchThreshold,
+            NewSpeakerThreshold = NewSpeakerThreshold,
+            MaxSpeakers = MaxSpeakers,
+            ContinuityWindow = ContinuityWindowSeconds,
+            MaxBufferedSeconds = MaxBufferedSeconds,
+        };
+    }
+
+    /// <summary>
+    /// 把毫秒意图换成落在帧网格上的样本数（<b>向下</b>取整：窗口里绝不多于请求的那段音频）。
+    ///
+    /// <para>为什么必须是公共的：窗口长度有两处消费者——分离器配置，和分割引擎本身
+    /// （<c>Analyze</c> 只接受它自己声明的那个长度）。两处各算一遍，迟早会出现「配置说要 3 秒、
+    /// 引擎按 10 秒切」的错位，然后每一帧都抛参数异常。</para>
+    /// </summary>
+    public static int SnapToFrameGrid(int milliseconds, int sampleRate, int frameShift)
+    {
+        if (milliseconds <= 0 || sampleRate <= 0 || frameShift <= 0) return 0; // 0 = 按引擎几何解算
+        int samples = (int)Math.Round(milliseconds / 1000.0 * sampleRate);
+        return Math.Max(frameShift, samples / frameShift * frameShift);
     }
 }
 
