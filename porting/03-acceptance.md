@@ -212,9 +212,10 @@
       `waited_for_audio` 判据、5 帧编码器排空、重采样绝对输出游标使分块喂入等价于整块）。
       验证：pacer/resampler 表征单测 10、门控 6、registry+503 体 9、SIPSorcery 进程内环回 5（真 HTTP + 真 SDP/ICE/DTLS/datachannel），
       以及 `tools/smoke/webrtc_smoke.py` 用 aiortc 1.15 跨实现互证 PASS（415 / 201 / 连接 / `session.created` / append 门控 / DELETE）。
-      仍开放的只有 C029（会话 id 前缀 `conn_` vs 上游 `session_`，accepted：对客户端是不透明回传令牌）。
+      会话 id 也已对齐（C029 **已解决 2026-10-27**）：统一为 `session_<32hex>`，同一个值贯穿
+      `session.created`/`session.updated` 的 `session.id`、`Location` 头、DELETE 路径参数。
       **2026-10-27 复跑确认链路此刻可用**（不只是「代码在位」）：`serve --port 8791` + `webrtc_smoke.py` 五项全绿，
-      ICE/DTLS 真的连上（`pc state: connected` → `closed`），`call_id=6e9aac6e…` 走完 201 → datachannel
+      ICE/DTLS 真的连上（`pc state: connected` → `closed`），`call_id=session_822b7e48…` 走完 201 → datachannel
       `session.created` → append 门控 → DELETE 200 → 重复 DELETE 404 整条线
 
 ## 未闭合风险
@@ -758,3 +759,43 @@ D033 之前 `ISpeakerEmbedding` 只有接缝：分离能给出「谁在什么时
 
 账本动作：新增 **C037**（认亲判据，参照缺陷不复现）。
 差异账 **72 条（resolved 55 / accepted 17 / gap 0）**。测试 **470/470**，全解决方案 0 警告 0 错误。
+
+### 会话 id 的三处可见面（2026-10-27，C029 收口）
+
+起因是复核一条 `accepted` 的旧记录。它写着「本实现会话 id 是 `conn_<32hex>`，与上游 `session_` 前缀不同」，
+理由是「id 对客户端是不透明回传令牌，格式差异不影响行为等价」。**这句记录本身就不准**，实测三层都不对：
+
+| 面 | 上游 | 本实现（修前） |
+|---|---|---|
+| `session.created` 的 `session.id` | `session_<32hex>` | **字段完全不存在** |
+| `session.updated` 的 `session.id` | 同上（`model_copy` 覆盖同一个值） | **字段完全不存在** |
+| WebRTC `Location` 头 | `/v1/realtime/calls/session_<32hex>` | `/v1/realtime/calls/<32hex>`（无前缀） |
+| `conn_<32hex>` | 无此形态 | 只存在于私有字段里，仅供时延账分作用域，**从不出线** |
+
+**为什么旧记录判定为 accepted 而没人发现。** 两条原因叠在一起：
+
+1. `ServerEvent.SessionCreated(string sessionId, JsonObject session)` 的 `sessionId` 参数**方法体从未使用**。
+   写了一半就停了——编译不报错（参数没用不会警告），调用点看起来也在正确传值。
+2. 协议语料根本没有覆盖这一格：`corpus/protocol/` 里没有 `session.created` 样例，
+   `protocol_probe._normalize` 只把 `event_id` 换成 `<event_id>`。所以「基线绿」从来没被检验过。
+
+**修法。** 会话 id 只在 `RealtimeConnection` 生成一次，形态 `session_<32hex>`：
+
+- `SessionId` 属性直接返回它，不再借用 `ChatSession.SessionId`（那是 LLM 上下文容器的内部标识，没有线上前缀）。
+- `ServerEvent.SessionCreated` / `SessionUpdated` 收下这个 id 写进 `session.id`，写入前 `DeepClone`，
+  **绝不回写**调用方传入的配置快照；客户端在 `session.update` 里自造的 id 会被覆盖（上游 `model_copy(update=...)` 同口径）。
+- WebRTC 的 `Location` 与 DELETE 路径本来就用 `connection.SessionId`，形态一改自然对齐，无需另动。
+
+**验证。** 单测 3 例（带 id 且保留其它字段 / updated 同 id 且不改快照 / 覆盖客户端自造 id）；
+`WebRtcLoopbackTests` 把 `Location` 断言从「匹配路径前缀」收紧为
+`^/v1/realtime/calls/session_[0-9a-f]{32}$`，并新增「datachannel 里的 `session.id` == Location 末段」——
+只断言前缀的话，一个空 id 也能过，这正是上一版的漏洞。
+
+真跑：WS 侧拿到 `session_89721de91d3d4cc68970fff2516bc3ed`，发 `session.update` 伪造 `session_forged` 后
+`session.updated` 仍是原值；`webrtc_smoke.py` 五项全 PASS，`call_id=session_822b7e48c25648049864b00da06d2935`
+（对比修复前的 `6e9aac6ebb4148168418fbc202faa097`）。
+
+**双向验证。** 去掉两处 id 注入后三条单测全挂（NRE / 字符串不等），环回测试挂在 `Location` 正则上；
+恢复后 482/482 全过。
+
+账本动作：`C029` 由 accepted 翻 **resolved**（差异账 73 条：resolved 57 / accepted 16 / gap 0）。
