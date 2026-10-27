@@ -369,8 +369,8 @@ public sealed class RealtimeConnection : IAsyncDisposable
             else
             {
                 // 打开了分离却缺一个模型接缝：这一级跳过，转写照发、无说话人标签。
-                // 与「打开口型却没有模型」不同，这里不是配置错误而是能力缺口——
-                // 缺的是声纹引擎（D033），用户没有给错参数。
+                // CLI 的装配路径已经保证两者齐备（缺模型启动即失败），走到这里只可能是
+                // 有人自己拼 BackendContext 做诊断——说清楚缺的是什么，别让人去翻参数。
                 _backends.Log(
                     "warning: 已启用流式说话人分离，但本构建缺少" +
                     (_backends.SpeakerSegmentation is null ? "分割模型" : "声纹引擎") +

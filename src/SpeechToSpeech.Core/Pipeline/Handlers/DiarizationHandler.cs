@@ -20,8 +20,8 @@ namespace SpeechToSpeech.Core.Pipeline.Handlers;
 /// </list>
 ///
 /// <para>与上游的差别（D009）：上游把 VAD 选中<em>之后</em>的语音块送进 worker，用模型自带的 speaker cache
-/// 跨 VAD 边界保持身份；本实现没有那个 cache（参照实现给的是声纹比对，见 D033），送连续音频反而更省事——
-/// 没有「跳过的静音」要拼，也就不存在把两段不相邻的波形接成一个假边界的问题。</para>
+/// 跨 VAD 边界保持身份；本实现没有那个 cache，改走「每轮一次声纹 + 会话级原型比对」（D033），
+/// 所以送连续音频反而更省事——没有「跳过的静音」要拼，也就不存在把两段不相邻的波形接成一个假边界的问题。</para>
 /// </summary>
 public sealed class DiarizationHandler : BaseHandler<object, object>
 {
@@ -268,7 +268,8 @@ public sealed class DiarizationHandler : BaseHandler<object, object>
         }
         catch (Exception ex)
         {
-            // 分离失败不能把会话弄坏：转写照发，标签缺失（D033 的「无生产者」形态）。
+            // 分离失败不能把会话弄坏：转写照发，标签缺失（声纹引擎在推理时抛异常的情形）。
+            // 启动阶段缺模型是另一回事——那是直接失败，不会走到这里。
             _log?.Invoke($"DiarizationHandler: 增量分离失败，本会话后续不再给说话人标签（{ex.Message}）");
         }
     }

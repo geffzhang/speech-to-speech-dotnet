@@ -48,8 +48,9 @@ public sealed class BackendContext
     public ISpeakerMaskSegmentation? SpeakerSegmentation { get; init; }
 
     /// <summary>
-    /// 声纹引擎（把一段音频压成一个说话人向量）。null 表示没有可用实现——见差异账 D033：
-    /// 上游用模型自带的 speaker cache，本实现走声纹比对，缺它就只缺「同一个人」这一层判断。
+    /// 声纹引擎（把一段音频压成一个说话人向量）。CLI 在 <c>--diarization</c> 下保证非 null
+    /// （缺模型启动即失败，见差异账 D033）；为 null 只出现在「只要分割、不要身份」的装配里，
+    /// 那时分离级不启动，对外行为与未开分离一致。
     /// </summary>
     public ISpeakerEmbedding? SpeakerEmbedding { get; init; }
 
