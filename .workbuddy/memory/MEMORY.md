@@ -71,6 +71,20 @@
 - 口径差异（C034）：本引擎整窗连续（静音也发 sil）vs 上游音素稀疏；时间量化 10ms。尾部少 10ms 是重采样延迟线（23 样本）。
 - Context 匹配陷阱：EndOfResponse 的 (response_key, generation) 必须与 AudioOutput 一致才冲尾——测试里代际给 null 对 0 会「看起来不冲」。
 
+## 流式说话人分离（D009 resolved / D033 accepted / C035，2026-10-27）
+
+- 参照 `C:\workshop\github\voxa` 分支 `feat/streaming-diarization` @ `cc60257`（锁 `porting/reference-lock.voxa.json`）。只取行为语义，按本仓库线程链重装。
+- 两包：`src/SpeechToSpeech.Audio.Diarization`（纯 C# 状态机：Seams/AudioRingBuffer/SpeakerPrototypes/StreamingDiarizer/SpeakerTimeline）+ `src/SpeechToSpeech.Backends.PyannoteDiarization`（ORT 1.31.0）。
+- **powerset 语义**：`p[s]=Σ_c softmax[c]·mapping[c][s]`，边缘和**故意 ≠1**（双人类别给两成员各一份）→ 一帧两项非零=重叠。压平成 speech/silence 会同时丢掉谁/重叠/置信度。
+- **本地通道窗口内有效**：窗口 A 的 ch0 ≠ 窗口 B 的 ch0 → 身份必须由**每轮一次的声纹**携带，不能按通道跨窗累积。
+- **几何从帧网格反推**：模型 `window_size=160000` 对 `receptive_field_shift=270` 不整除（592.6 帧）。模型声明的窗口向下取整（159840=592 帧=9.99s），默认跳长 58 帧（15660）凑 own 区起点奇偶；**显式给错的仍拒绝**。引擎只校验「窗口不短于感受野」。参照实现在这条上会拒掉它自己钉的模型（C035，其真模型路径从未跑通）。
+- **窗口必须同时喂引擎**：`Analyze` 只接受引擎声明的长度 → `DiarizationOptions.SnapToFrameGrid` 一处定义，CLI 用它算长度再建正式引擎（否则 `--diarization_window_ms` 每帧抛异常）。
+- **会话结束 ≠ 开新会话**：`OnSessionEnd` 只冲尾（STT 队列里还排着音频，归因要用尾部段），`Reset()` 才清空+时钟归零+重建分离器。`DrainBlocking` 必须退让重试到 `FlushTimeout`——收尾时放弃会让「已经冲完」变谎话。
+- **归因落点**：`SttHandler`（转写与其音频区间只在这一处同时在场）。区间最多者胜、并列取更早、超出已提交时间线按 continuity 借前一位、无线索宁可 Unknown。线上事件保持原话，只给 LLM 历史加 `[speaker_N]`。
+- **非阻塞**：`DiarizationHandler` 在 VAD 之前（要连续音频），有界 `Channel` + 单 worker，**队列满=时间轴缺口**（`NotifyGap`，`_pendingGap` 专职上报而 `_droppedSamples` 保持累计）。
+- **模型**：`models/pyannote-segmentation/model.onnx`（sherpa 导出 5,992,913 B，SHA-256 `220ad67c…`），不入库。冒烟 `tools/DiarizationProbe`（`--metadata` / `--pcm` 裸 f32 16k / `--window` 缩短窗）。真值：一窗 589 帧、静音 0 活跃、真人语音 501/589 活跃且 2 通道点亮、两次推理逐位相同、3s 窗前瞻 4.51→1.35s。
+- **剩余（D033）**：`ISpeakerEmbedding` 只有接缝，参照实现同样没有——接真人声纹只需实现 `Embed`（16k 单轮 → L2 向量）并在 CLI 赋值，状态机零改动。
+
 ## 当前状态（2026-10-27）
 
-差异账 68 条：resolved 50 / accepted 17 / gap 1（仅剩 D009：流式说话人分离；口型已全通 D031+D032）。测试 415/415。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy——mel/FFT 互证参照）。
+差异账 70 条：resolved 52 / accepted 18 / **gap 0（首次归零）**。测试 456/456。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy——mel/FFT 互证参照）。
