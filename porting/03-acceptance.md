@@ -193,6 +193,8 @@
 - [x] **真跑打断**（2026-10-26）—— `--speak-twice --gap 3`：第二段在第 1 轮响应进行中推入，触发 `response.cancel`。
       修复前（C024）第一轮的取消把整条连接的丢弃保护永久打开，第二轮响应只有 `response.created` 与空的 `response.done`；
       修复后第二轮完整出转写、分片与终态，被取消的第一轮照常发 done（`status=cancelled`）并回滚历史。
+- [x] **四后端真权重端到端**（2026-10-27）—— VAD / ASR / TTS / Smart Turn 全部用真实权重跑通，
+      `smart_status=complete` 首次成立（此前都是缺模型的 `disabled` 降级）。见「真实模型端到端」小节
 - [x] **容器内**（E002 **已解决**）—— `Dockerfile`（多阶段：`sdk:10.0` restore/publish → `aspnet:10.0`，EXPOSE 8765，模型卷 `/models`）+ `.dockerignore` + `docker-compose.yml`。
       实跑：镜像 1.14 GB 构建成功、容器内 `serve` 干净启动、宿主冒烟客户端经容器协议层打到 `host.docker.internal` 上的 llama-server，`tool_call_smoke` 与 `error_shape_smoke` 双绿。
       实跑中修掉两处打包缺陷：`ENTRYPOINT` 用错程序集名（`AssemblyName` 是 `speech-to-speech`）；compose 的 `llm_base_url` 带 `/v1` 后缀会拼成 `/v1/v1/chat/completions`。
@@ -322,6 +324,46 @@ token 记账按 `response_key` 挂起、收口结转、已关闭 key 丢弃迟�
 
 带外响应（D024）、空历史口径（D026）、instructions 回落（C027）、`response.create` 的 `input` 数组（D025）与 error 形状归位（D027）均已于 2026-10-27 解决（各自有单测 + 专用冒烟脚本真跑闭环）。协议面缺口清零，剩余 gap 为已接受的架构性分歧与待 OpenAI 兼容后端的项目。D023 已于 2026-10-27 解决（协议侧），**工具调用的真实 LLM 端到端已于 2026-10-27 补验**（见下）。带 TTS 音频的端到端已于 2026-10-26 补齐（`tts_ttfa_s` / `e2e_s` 落地，C025 修复），最后是真实音频设备的 `local` / `talk` 听感验证。
 真跑一轮（`serve` + 脚本化客户端）已于 2026-10-26 完成，单轮时序、两轮与打断三场景见「端到端」小节——它当轮就暴露并修掉了 C020/C021/C022/C023/C024 五个缺陷，验证了「差分语料全绿 ≠ 真机能跑」。
+
+### 真实模型端到端（2026-10-27，四个后端全用真权重）
+
+此前所有端到端记录的 `smart_status` 都是 `disabled`（缺权重时退回投机宽限）。这次 VAD / ASR /
+TTS / Smart Turn 四类权重全部就位，第一次让**判定器真的参与端点判定**：
+
+```bash
+serve --port 8791 \
+  --vad_model_dir <s2s>/vad5 --whisper_model_dir <s2s>/whisper --whisper_language zh \
+  --qwen3_model_dir <s2s>/tts --smart_turn_model_path <s2s>/smart-turn/smart-turn-v3.2-cpu.onnx \
+  --llm_model_path <s2s>/llm35/Qwen3.5-0.8B-Q4_K_M.gguf
+python tools/smoke/serve_smoke.py --wav speech_6s.wav --url ws://127.0.0.1:8791/v1/realtime
+```
+
+时间线（相对开播）：
+
+| 时刻 | 事件 |
+|---|---|
+| +396 ms | `session.created` / `session.updated` |
+| +423 ms | `input_audio_buffer.speech_started`（VAD 开口 192 ms） |
+| +6276 ms | `speech_stopped` → `committed` → `conversation.item.created` |
+| +8314 ms | `transcription.completed` |
+| +8314 ms | `response.created` |
+| +88326 ms | `output_item.done` → `response.done status=completed`，`output_items=1` |
+
+时延账：`stt_s=1.95 llm_s=3.07 tts_ttfa_s=29.55 e2e_s=34.37 vad_decision_s=0.122 hold_s=0.0
+smart_status=complete`。**`smart_status=complete` 是这轮唯一新增的验证面**——其余各项此前都有记录。
+
+真跑当轮暴露并修掉 **D034**：whisper 的 `language` 参数被静默忽略（日志每轮刷
+`This tokenizer does not have language token configured`）。参数在、行为不在，属于最难发现的一类差异。
+
+三条环境事实（后端性质，不是行为等价问题）：
+
+- **TensorSharp 不支持 qwen2 架构**：用 `qwen2.5-0.5b` 直接抛 `Unsupported architecture: qwen2`，
+  整轮 LLM 空产出（`output_items=0` + `language model produced no output`）。必须用 `qwen35`
+  （Qwen3.5-0.8B）——这条已在工作记忆里记过，仍然值得在文档重复一次，因为报错发生在流里而不是启动时。
+- CPU 上没有 `full-decode` 融合图，qwen35 走 per-op decode（运行时自己打印「roughly 10x slower」，
+  实测 3.1 s/轮）；Qwen3-TTS 首轮 94.8 s（含 5.5 GB 权重加载）、热态 29.6 s/段。
+- whisper 这份导出是 **tiny**（4 层 / 384 维 / 80 mel），中文转写质量有限（同一段音频稳定给出
+  一串谐音字）。换更大模型只需换 `--whisper_model_dir`，与实现无关。
 
 ### 容器实跑（2026-10-27，E002 收口）
 
