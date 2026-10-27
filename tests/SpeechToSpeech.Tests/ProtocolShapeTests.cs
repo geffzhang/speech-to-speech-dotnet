@@ -204,7 +204,8 @@ public sealed class ProtocolShapeTests
     {
         var events = new JsonObject[]
         {
-            ServerEvent.SessionUpdated(new JsonObject()),
+            ServerEvent.SessionCreated("session_1", new JsonObject()),
+            ServerEvent.SessionUpdated("session_1", new JsonObject()),
             ServerEvent.SpeechStarted("item_1", 0),
             ServerEvent.SpeechStopped("item_1", 100),
             ServerEvent.InputAudioBufferCommitted("item_1", null),
@@ -231,6 +232,48 @@ public sealed class ProtocolShapeTests
         {
             Assert.True(payload.ContainsKey("event_id"), $"missing event_id on {payload["type"]}");
         }
+    }
+
+    [Fact]
+    public void SessionCreated_CarriesSessionIdUnderSessionObject()
+    {
+        // 上游 build_session_created 用 model_copy(update={"id": conn_id}) 把会话 id 覆盖进
+        // session 对象再 dump，客户端据此把后续事件对应到连接。此前本实现完全没发这个字段
+        // （C029），客户端读 session.id 只能拿到 null。
+        var config = new JsonObject { ["type"] = "realtime", ["instructions"] = "hi" };
+
+        var payload = ServerEvent.SessionCreated("session_abc", config);
+
+        Assert.Equal("session_abc", payload["session"]!["id"]!.GetValue<string>());
+        Assert.Equal("realtime", payload["session"]!["type"]!.GetValue<string>());
+        Assert.Equal("hi", payload["session"]!["instructions"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void SessionUpdated_CarriesSessionId_WithoutMutatingTheConfigSnapshot()
+    {
+        // 快照来自配置的深拷贝；事件构造器往会话对象里塞 id 不能回写到配置本身，
+        // 否则 id 会跟着配置活到下一次 update。
+        var config = new JsonObject { ["type"] = "realtime" };
+
+        var created = ServerEvent.SessionCreated("session_abc", config);
+        var updated = ServerEvent.SessionUpdated("session_abc", config);
+
+        Assert.Equal("session_abc", created["session"]!["id"]!.GetValue<string>());
+        Assert.Equal("session_abc", updated["session"]!["id"]!.GetValue<string>());
+        Assert.Null(config["id"]);
+    }
+
+    [Fact]
+    public void SessionUpdated_OverridesAClientSuppliedId()
+    {
+        // 客户端在 session.update 里自带 id 会被配置快照原样收下；出线前必须换成服务端 id，
+        // 与上游 model_copy(update=...) 同口径——否则客户端能让服务端回显它编的会话 id。
+        var config = new JsonObject { ["type"] = "realtime", ["id"] = "session_evil" };
+
+        var updated = ServerEvent.SessionUpdated("session_real", config);
+
+        Assert.Equal("session_real", updated["session"]!["id"]!.GetValue<string>());
     }
 
     /// <summary>一份字段齐备的响应快照。默认值刻意取非空，缺字段的回归才会被断言抓到。</summary>

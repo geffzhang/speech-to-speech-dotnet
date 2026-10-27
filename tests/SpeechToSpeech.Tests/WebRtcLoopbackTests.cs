@@ -188,8 +188,11 @@ public sealed class WebRtcLoopbackTests
             var response = await PostOfferAsync(http, baseUrl, pc);
             Assert.Equal(System.Net.HttpStatusCode.Created, response.StatusCode);
             Assert.Equal("application/sdp", response.Content.Headers.ContentType?.MediaType);
+
+            // 上游 Location 用的是 register() 返回的会话 id：session_<32hex>。
+            // 不能只断言路径前缀——那样连一个空 id 都能过（C029）。
             var location = response.Headers.Location?.OriginalString;
-            Assert.Matches("^/v1/realtime/calls/", location);
+            Assert.Matches("^/v1/realtime/calls/session_[0-9a-f]{32}$", location);
 
             var answerSdp = await response.Content.ReadAsStringAsync();
             var result = pc.SetRemoteDescription(SdpType.answer, SDP.ParseSDPDescription(answerSdp));
@@ -205,6 +208,12 @@ public sealed class WebRtcLoopbackTests
             // 服务端 datachannel 开启 → _on_open → session.created 推过来。
             var received = await sessionCreated.Task.WaitAsync(TimeSpan.FromSeconds(15));
             Assert.Contains("\"type\":\"session.created\"", received);
+
+            // 同一个 id 必须贯穿两处客户端可见面：datachannel 里的 session.id 与
+            // HTTP 的 Location。上游 conn_id 就是这么串起来的一个值（C029）。
+            var created = System.Text.Json.Nodes.JsonNode.Parse(received)!.AsObject();
+            var wireSessionId = created["session"]!["id"]!.GetValue<string>();
+            Assert.Equal(location!.Split('/').Last(), wireSessionId);
         }
         finally
         {

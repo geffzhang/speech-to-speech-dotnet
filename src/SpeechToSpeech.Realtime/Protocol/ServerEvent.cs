@@ -138,21 +138,42 @@ public static class ServerEvent
         };
     }
 
+    /// <summary>
+    /// <c>session.created</c>。会话 id 必须写进 <c>session.id</c>——上游
+    /// <c>build_session_created</c> 用 <c>model_copy(update={"id": conn_id})</c> 覆盖后再 dump，
+    /// 客户端据此把后续事件对应到连接（差异账 C029）。
+    ///
+    /// 入参 <paramref name="session"/> 不被修改：调用方拿到的是配置快照，
+    /// 会话 id 属于线上形态，不该回写到配置里。
+    /// </summary>
     public static JsonObject SessionCreated(string sessionId, JsonObject session)
-        => new()
+    {
+        var payload = (JsonObject)session.DeepClone();
+        payload["id"] = sessionId;
+        return new JsonObject
         {
             ["type"] = EventNames.SessionCreated,
             ["event_id"] = NewEventId(),
-            ["session"] = session,
+            ["session"] = payload,
         };
+    }
 
-    public static JsonObject SessionUpdated(JsonObject session)
-        => new()
+    /// <summary>
+    /// <c>session.updated</c>。与 <c>session.created</c> 同口径带 <c>session.id</c>：
+    /// 上游 <c>build_session_updated</c> 同样覆盖 id，客户端若在 update 之后重读 id 不会拿到空值。
+    /// 客户端在 <c>session.update</c> 里自带的 id 会被覆盖掉，不出线。
+    /// </summary>
+    public static JsonObject SessionUpdated(string sessionId, JsonObject session)
+    {
+        var payload = (JsonObject)session.DeepClone();
+        payload["id"] = sessionId;
+        return new JsonObject
         {
             ["type"] = EventNames.SessionUpdated,
             ["event_id"] = NewEventId(),
-            ["session"] = session,
+            ["session"] = payload,
         };
+    }
 
     public static JsonObject SpeechStarted(string itemId, int audioStartMs)
         => new()

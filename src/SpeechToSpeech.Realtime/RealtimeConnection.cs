@@ -59,8 +59,11 @@ public sealed class RealtimeConnection : IAsyncDisposable
     private readonly SpeculativeTurnTracker _speculativeTurns = new();
     private readonly TurnLatencyStore _latency = new();
 
-    // 连接级会话标识。时延账按会话清理，角色与上游的 conn_id 相同。
-    private readonly string _sessionId = "conn_" + Guid.NewGuid().ToString("N");
+    // 连接级会话标识。上游 register() 返回的是 _generate_id("session") = session_<32hex>，
+    // 同一个值贯穿三处客户端可见面：session.created/updated 的 session.id、
+    // WebRTC 的 Location 头、以及 DELETE 挂断的路径参数（差异账 C029）。
+    // 不要改成别的形态——客户端可能按前缀过滤。
+    private readonly string _sessionId = "session_" + Guid.NewGuid().ToString("N");
 
     // 说话产生的 E2E 名额，按（轮次, 修订）共享。
     // 同一条链上的工具回答共用一个名额，否则一句话会被量出两次 E2E。
@@ -244,7 +247,15 @@ public sealed class RealtimeConnection : IAsyncDisposable
         _config = new RuntimeConfig(new ChatSession(), session);
     }
 
-    public string SessionId => _config.Chat.SessionId;
+    /// <summary>
+    /// 线上会话 id（<c>session_&lt;32hex&gt;</c>）。三处客户端可见面共用这一个值：
+    /// <c>session.created</c>/<c>session.updated</c> 的 <c>session.id</c>、WebRTC 的
+    /// <c>Location</c> 头、DELETE 的路径参数。
+    ///
+    /// 不要改回 <see cref="ChatSession.SessionId"/>：那是 LLM 上下文容器的内部标识、
+    /// 没有线上前缀，拿它出线会让客户端看到一个与上游不同形态的 id（C029）。
+    /// </summary>
+    public string SessionId => _sessionId;
 
     /// <summary>启动管线线程并进入读/写循环，直到连接关闭。</summary>
     public async Task RunAsync()
@@ -703,7 +714,7 @@ public sealed class RealtimeConnection : IAsyncDisposable
         }
 
         _config.ApplySessionUpdate(session);
-        await SendAsync(ServerEvent.Serialize(ServerEvent.SessionUpdated(_config.SnapshotSession())));
+        await SendAsync(ServerEvent.Serialize(ServerEvent.SessionUpdated(SessionId, _config.SnapshotSession())));
     }
 
     private async Task HandleConversationItemCreateAsync(JsonObject json)
