@@ -179,7 +179,7 @@
 - [x] **真跑 TTS 完整收口**（2026-10-26）—— Qwen3-TTS 模型（5.9 GB）就位后补跑。`response.done status=completed`，
       metadata 全账落地：`e2e_s=47.55 tts_ttfa_s=43.31 stt_s=1.76 llm_s=3.42 vad_decision_s=0.186 smart_status=complete hold_s=0.0`。
       首跑抓出 C025（`e2e_s` 锚链在 `TtsInput.Create` 断裂）并修复；`tts_ttfa_s` 与 `e2e_s` 是不同的量（首包 vs 首包-语音结束），各自独立记账。
-      **注意**：ElBruno.QwenTTS 的 ONNX 管线在 CPU 上逐句合成 15–190 s/句，是后端运行时性能（上游用 faster-qwen3-tts/mlx-audio），不是行为等价问题（D-01）。
+      **注意**：ElBruno.QwenTTS 的 ONNX 管线在 CPU 上逐句合成 15–190 s/句，是后端运行时性能（上游用 faster-qwen3-tts/mlx-audio），不是行为等价问题（D001）。
       冒烟脚本新增 `--instructions` 与 `--max-output-tokens`（session.update 覆盖），用于控制回复长度。
 - [x] **脚本化客户端可复现** —— 推流按真实时长走（一次性灌完会让 VAD 看到的时间轴与实际不符），尾部必须补静音，
       否则 VAD 永远不知道用户说完了（第一次跑就卡在 `speech_started` 之后）。
@@ -193,6 +193,9 @@
 - [x] **真跑打断**（2026-10-26）—— `--speak-twice --gap 3`：第二段在第 1 轮响应进行中推入，触发 `response.cancel`。
       修复前（C024）第一轮的取消把整条连接的丢弃保护永久打开，第二轮响应只有 `response.created` 与空的 `response.done`；
       修复后第二轮完整出转写、分片与终态，被取消的第一轮照常发 done（`status=cancelled`）并回滚历史。
+      **2026-10-27 真权重下复验**：桩后端时代 TTS 毫秒返回，打断窗口只有几毫秒，几乎打不着；真权重下一句话合成
+      30–104 s，第二句必然落在音频流中段，这才是打断的真实工况。同连接两轮各自收口（`cancelled` / `completed`），
+      顺带第一次量出 D001 的代价。详见「打断与同连接两轮」小节
 - [x] **四后端真权重端到端**（2026-10-27）—— VAD / ASR / TTS / Smart Turn 全部用真实权重跑通，
       `smart_status=complete` 首次成立（此前都是缺模型的 `disabled` 降级）。见「真实模型端到端」小节
 - [x] **容器内**（E002 **已解决**）—— `Dockerfile`（多阶段：`sdk:10.0` restore/publish → `aspnet:10.0`，EXPOSE 8765，模型卷 `/models`）+ `.dockerignore` + `docker-compose.yml`。
@@ -364,6 +367,79 @@ smart_status=complete`。**`smart_status=complete` 是这轮唯一新增的验�
   实测 3.1 s/轮）；Qwen3-TTS 首轮 94.8 s（含 5.5 GB 权重加载）、热态 29.6 s/段。
 - whisper 这份导出是 **tiny**（4 层 / 384 维 / 80 mel），中文转写质量有限（同一段音频稳定给出
   一串谐音字）。换更大模型只需换 `--whisper_model_dir`，与实现无关。
+
+### 打断与同连接两轮（2026-10-27，真权重实测 D001 的代价）
+
+打断（barge-in）这条路径以前只在**桩后端**上验过，那时 TTS 是毫秒级返回，打断窗口窄得几乎打不着。
+真权重下不一样：一句话要合成 30–104 秒，第二句话必然落在第一轮音频流的中段。这才是打断的真实工况。
+
+```bash
+# serve 用真实权重起（同上一节），先跑一轮热身把 5.5 GB TTS 载入内存
+python tools/smoke/serve_smoke.py --wav speech_6s.wav --url ws://127.0.0.1:8791/v1/realtime --timeout 300
+# 再跑两轮，gap=3 让第二句话插进第一轮回答里
+python tools/smoke/serve_smoke.py --wav speech_6s.wav --url ws://127.0.0.1:8791/v1/realtime \
+  --speak-twice --gap 3 --timeout 900
+```
+
+时间线（同一条连接，相对开播）：
+
+| 时刻 | 事件 |
+|---|---|
+| +211 ms | `session.created` / `session.updated` |
+| +367 ms | `speech_started`（VAD 开口 192 ms） |
+| +6246 ms | `speech_stopped` → `committed` → `item.created`（turn_1） |
+| +8100 ms | `transcription.completed` → `response.created` |
+| +9633 ms | `output_item.added`（LLM 文本已定，TTS 还没出音） |
+| **+10856 ms** | **`response.done status=cancelled`——第二轮开口的同一毫秒** |
+| +10856 ms | `speech_started`（turn_2） |
+| +18781 ms | `transcription.completed` → `response.created`（turn_2） |
+| +113646 ms | `output_item.added`（等前一轮被废弃的合成跑完，见下） |
+| +153598 ms | `output_audio.done` → `response.done status=completed output_items=1` |
+
+两轮的时延账：
+
+| 轮次 | stt | llm | tts_ttfa | e2e | vad_decision | 状态 |
+|---|---|---|---|---|---|---|
+| turn_1 | 1.82 s | 1.54 s | **n/a** | **n/a** | 0.109 s | cancelled |
+| turn_2 | 1.86 s | 1.40 s | 39.96 s | 136.84 s | 0.202 s | completed |
+
+这一轮锁住的六件事：
+
+1. **打断在第二个 `speech_started` 的同一毫秒收口**，且 `response.done` 先于 `speech_started` 发出
+   （`EmitAsync` 里先 `HandleResponseCancelAsync()` 再发事件）——客户端先知道「上一轮作废」，再知道「你开口了」。
+2. **被打断那轮记 `n/a` 而不是 0**。没有音频就没有首包，填 0 等于让时延账凭空变好。
+3. **被打断那轮一个 `output_audio.delta` 都没有**：陈旧音频在 `RealtimeConnection.cs:1455` 按代际丢弃。
+4. **第二轮在同一条连接、同一个 `conv_` 下收口 `completed`**，`output_items=1`——打断没有把会话搞坏。
+5. **两轮 `smart_status` 都是 `complete`**：判定器在打断路径上照常参与，没有退化成 disabled。
+6. **被作废那轮的助手文本不入历史**：打断复用 `HandleResponseCancelAsync()`，其中 `RollbackToCommit()`
+   撤回提交点之后追加的消息。侧证是第二轮 prompt 长度 273 vs 第一轮 210——差的只有第二条用户话语。
+
+#### D001 的代价，第一次被量出来
+
+同一份日志里能读出被打断那轮的合成并没有停：
+
+```
+Turn turn_1 ... status=cancelled
+Generated 92 audio frames
+TtsHandler: 104.001 s        ← 已被作废的那一轮仍在合成
+Generated 47 audio frames
+TtsHandler: 39.961 s         ← turn_2 的合成，等它跑完才开始
+```
+
+对得上账：turn_2 的 `response.created`（18.8 s）到 `output_item.added`（113.6 s）相隔 **94.8 s**，
+而被废弃的合成在打断发生时已经跑了约 9.6 s，104.0 − 9.6 = **94.4 s**，与 94.8 s 相差不到半秒。
+换句话说，**第二轮的等待就是第一轮那段白烧的合成**，不是别的原因。
+
+这是 D001（整句合成而非逐帧流式）的结构性代价，不是新缺陷：上游 `_stream` 是生成器，每个 chunk
+查一次 `is_stale`，命中即返回，毫秒级收敛；`IsProgressive=false` 的 ONNX 管线一旦开始就只能读完这一句。
+CPU 上没法消掉——ONNX 会话不是线程安全的，抢跑只会更慢；GPU 上同样的结构代价约 1 秒量级。
+正确性没有受损（陈旧音频被丢弃、历史被回滚、下一轮正常收口），损失的是被作废那一轮的 CPU 与下一轮的等待。
+
+#### 一处已知噪音（不修）
+
+会话在 TTS 合成中途关闭时，日志出现 `RunLoop: TtsHandler: Error in Process(): OperationCanceledException`。
+这是正常关停路径（`Stopping` 触发的取消），被 `BaseHandler.RunLoop` 的 `catch (Exception)` 当成错误上报。
+不影响协议行为，也不影响任何一条事件；`TranscriptLog` 没有可观测入口，为一行日志加测试缝不划算，故记录不修。
 
 ### 容器实跑（2026-10-27，E002 收口）
 
