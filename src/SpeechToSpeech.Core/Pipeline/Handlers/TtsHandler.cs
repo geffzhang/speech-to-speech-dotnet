@@ -51,9 +51,19 @@ public sealed class TtsHandler : BaseHandler<object, object>
 
             case TtsInput tts:
                 {
+                    // TTFA 的起点是**第一次合成开始**，不是第一个分片的到达。按句切开后逐句合成，
+                    // 后面几句再快也不能把首包时间改小（RecordTtsTtfa 只记第一次）。
+                    var synthesisStartedAt = Monotonic.NowSeconds();
+                    var firstAudioReported = false;
+
+                    // 判据是这一条输入自己的代际，不是「取消过就不合成」：打断之后
+                    // discarding 会一直亮着，拿它当闸门会让用户打断后说的下一句话
+                    // **一句都不合成**——回复文本照发，只是没有声音。
+                    var generation = tts.CancelGeneration ?? _cancelScope.Generation;
+
                     foreach (var sentence in SplitForSynthesis(tts.Text))
                     {
-                        if (_cancelScope.Discarding || Stopping.IsCancellationRequested)
+                        if (_cancelScope.IsDiscardable(generation) || Stopping.IsCancellationRequested)
                         {
                             yield break;
                         }
@@ -62,7 +72,7 @@ public sealed class TtsHandler : BaseHandler<object, object>
                         {
                             Text = sentence,
                             Language = tts.TtsLanguageCode,
-                            Speaker = tts.RuntimeConfig?.Voice,
+                            Speaker = tts.Voice,
                             Instruct = null,
                         };
 
@@ -100,6 +110,27 @@ public sealed class TtsHandler : BaseHandler<object, object>
                                 if (chunk.Length == 0)
                                 {
                                     continue;
+                                }
+
+                                if (!firstAudioReported)
+                                {
+                                    firstAudioReported = true;
+                                    var now = Monotonic.NowSeconds();
+
+                                    // ttfa 止于模型音频到达，早于重采样与分块组装。
+                                    _latency.RecordResponseTtsTtfa(tts.ResponseKey, now - synthesisStartedAt);
+
+                                    // e2e 从**估计的语音结束**算起，到首个产出音频为止。
+                                    // 没有语音终点（客户端直接 create）就不记，也不退化成别的时间点——
+                                    // 换个起点会让这一列数字前后不可比。
+                                    if (tts.SpeechStoppedAtSeconds is { } speechStoppedAt)
+                                    {
+                                        var e2eSeconds = now - speechStoppedAt;
+                                        if (e2eSeconds >= 0)
+                                        {
+                                            _latency.RecordResponseE2e(tts.ResponseKey, e2eSeconds);
+                                        }
+                                    }
                                 }
 
                                 yield return chunk;

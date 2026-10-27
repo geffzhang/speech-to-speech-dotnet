@@ -47,7 +47,58 @@ public sealed class LanguageModelHandler : BaseHandler<GenerateResponseRequest, 
         var response = input.Response;
 
         var history = config.Chat.Snapshot();
-        if (history.Count == 0 && input.Audio is null)
+        var outOfBand = response?.IsOutOfBand ?? false;
+
+        // 带外响应的输入三口径（上游 build_active_chat）：input 未携带读会话副本、
+        // input=[] 用空聊天、input=[...] 用这些项做一次性种子。种子在这里校验，
+        // 失败走 response.failed——上游同一处捕 ChatItemError 后 yield EndOfResponse。
+        if (outOfBand && input.InputItems is not null)
+        {
+            var seeded = new List<ChatMessage>();
+            foreach (var item in input.InputItems)
+            {
+                if (!ChatItemParser.TryParse(item, out var message, out var itemError))
+                {
+                    yield return new EndOfResponse
+                    {
+                        Error = itemError,
+                        ResponseKey = input.ResponseKey,
+                        CancelGeneration = generation,
+                    };
+                    yield break;
+                }
+
+                seeded.Add(message!);
+            }
+
+            history = seeded;
+        }
+
+        // 带内生成前检查会话是否在等工具结果（上游 active_chat.has_pending_tool_calls）：
+        // 悬空的函数调用开新一轮生成，模型会把没应答的调用当成已应答。
+        if (!outOfBand && config.Chat.HasPendingToolCalls())
+        {
+            yield return new EndOfResponse
+            {
+                Error = "Cannot generate a response while function call outputs are pending.",
+                ResponseKey = input.ResponseKey,
+                TurnId = input.TurnId,
+                TurnRevision = input.TurnRevision,
+                CancelGeneration = generation,
+            };
+            yield break;
+        }
+
+        // 上游口径：response.instructions 优先，response 为 None 或没带 instructions
+        // 时回落 runtime_config.session.instructions（C027：语音轮的请求不带 response，
+        // 少了这一步回落，session.update 配的指令在语音对话里从来没到过模型）。
+        var instructions = response?.ResolveInstructions(config) ?? config.Instructions;
+
+        // 上游没有「空会话」守卫：_apply_instructions 只要有 instructions 就把
+        // system 提示拼进聊天，模型对纯 system 上下文照常生成（新连接还没说话
+        // 就 response.create 是合法用法）。只有连 system 提示都拼不出来——
+        // 既无 instructions、也无音频、历史又为空——才真的没有可生成的上下文。
+        if (history.Count == 0 && input.Audio is null && string.IsNullOrWhiteSpace(instructions))
         {
             yield return new EndOfResponse
             {
@@ -63,7 +114,7 @@ public sealed class LanguageModelHandler : BaseHandler<GenerateResponseRequest, 
         var request = new LlmRequest
         {
             History = history,
-            Instructions = response?.ResolveInstructions(config),
+            Instructions = instructions,
             Tools = config.Tools,
             MaxOutputTokens = response?.ResolveMaxOutputTokens(config),
             Temperature = response?.ResolveTemperature(config),
@@ -74,6 +125,10 @@ public sealed class LanguageModelHandler : BaseHandler<GenerateResponseRequest, 
         var produced = false;
         string? error = null;
         var incomplete = ResponseIncompleteReason.None;
+
+        // llm_s 覆盖整段生成：从组装请求、发出去，到把 provider 的输出吃完。
+        // 失败的请求也要记——「模型报错」和「模型很慢」都是要看得见的。
+        var generationStartedAt = Monotonic.NowSeconds();
 
         IEnumerable<LlmResponseChunk> stream;
         try
@@ -114,12 +169,16 @@ public sealed class LanguageModelHandler : BaseHandler<GenerateResponseRequest, 
             TurnId = input.TurnId,
             TurnRevision = input.TurnRevision,
             CancelGeneration = generation,
+            // 「哪些工具结果真的到了模型」在这里定格：取的是**组装请求时用的那份历史**，
+            // 生成期间客户端再追加的条目不在这份快照里，也就没到过模型。
+            // 是否真的报给客户端由下游按 succeeded 决定（上游同一处分两段判断）。
+            InputToolCallIds = [.. ChatSession.ToolOutputCallIds(history)],
         };
 
-        if (input.TurnId is not null)
-        {
-            _latency.MarkResponseDone(input.TurnId);
-        }
+        // 用 response_key 而不是 turn_id 记账：同一轮里工具调用与它的口头回答是两条
+        // 独立的响应，按轮次记会把两者的 llm_s 挤进同一个格子。
+        // 不按「有没有 turn_id」筛：客户端独立创建的响应照样要有 llm_s，它只是没有 e2e。
+        _latency.GetResponse(input.ResponseKey)?.RecordLlm(Monotonic.NowSeconds() - generationStartedAt);
 
         yield return end;
     }

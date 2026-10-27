@@ -14,9 +14,18 @@ namespace SpeechToSpeech.Core.Pipeline.Handlers;
 /// </summary>
 public sealed class SttHandler : BaseHandler<VadAudio, PipelineMessage>
 {
+    /// <summary>
+    /// 闸门等待到这个量级才值得说一声（上游 <c>_GATE_WAIT_REPORT_S</c>）。
+    ///
+    /// 同一个阈值管两件事：打日志，以及决定要不要记 <c>vad_settle_s</c>。
+    /// 分成两个常量没有依据——上游就是同一个数。
+    /// </summary>
+    private const double GateWaitReportSeconds = 0.05;
+
     private readonly ISttBackend _backend;
     private readonly CancelScope _cancelScope;
     private readonly SpeculativeTurnTracker _speculativeTurns;
+    private readonly TurnLatencyStore? _latency;
 
     public SttHandler(
         CancellationToken stopping,
@@ -24,12 +33,14 @@ public sealed class SttHandler : BaseHandler<VadAudio, PipelineMessage>
         BlockingCollection<object> queueOut,
         ISttBackend backend,
         CancelScope cancelScope,
-        SpeculativeTurnTracker speculativeTurns)
+        SpeculativeTurnTracker speculativeTurns,
+        TurnLatencyStore? latency = null)
         : base(stopping, queueIn, queueOut)
     {
         _backend = backend;
         _cancelScope = cancelScope;
         _speculativeTurns = speculativeTurns;
+        _latency = latency;
     }
 
     public override CancelScope CancelScope => _cancelScope;
@@ -38,12 +49,51 @@ public sealed class SttHandler : BaseHandler<VadAudio, PipelineMessage>
 
     protected override IEnumerable<PipelineMessage> Process(VadAudio input)
     {
-        if (_speculativeTurns.Gate(input.TurnId, input.TurnRevision).Action == TurnGateAction.Drop)
+        // 入口闸门要真的等，不能只看一眼。上游在 STT 入口按 processing_deadline 阻塞：
+        // 端点判定说「没说完」时，用户接着说的那几个字应该在转写开工**之前**把这个修订作废——
+        // 只看一眼等于让 STT 白跑一次随后被丢弃的识别，处理延迟就成了纯装饰。
+        //
+        // holdForGrace 为 false：宽限只压输出，不压输入。把输入也压住的话，
+        // 用户续说时新旧两段音频会互相等，谁也不先出转写。
+        var processingDeadline = _speculativeTurns.ProcessingDeadline(input.TurnId, input.TurnRevision);
+        var gateStartedAt = Monotonic.NowSeconds();
+        var accepted = _speculativeTurns.WaitForGate(
+            input.TurnId,
+            input.TurnRevision,
+            holdForGrace: false,
+            holdUntil: processingDeadline);
+        var gateWaitSeconds = Monotonic.NowSeconds() - gateStartedAt;
+
+        if (gateWaitSeconds >= GateWaitReportSeconds)
         {
+            // 与上游同一行口径：等久了要留痕，否则「这一轮怎么这么慢」只能靠猜。
+            TranscriptLog.Info(
+                $"{GetType().Name}: STT input gate waited {gateWaitSeconds:F3}s"
+                + $" for turn={input.TurnId} rev={input.TurnRevision} mode={input.Mode ?? "<none>"}"
+                + $" latest={accepted} age={Monotonic.NowSeconds() - input.CreatedAtSeconds:F3}s"
+                + $" queue={QueueIn.Count}");
+        }
+
+        // `vad_settle_s` 记的是**整段输入闸门的等待**，只在两个条件同时成立时才有意义：
+        // 这一修订仍然是最新的（被作废的账马上会被摘掉），且它是定稿段（progressive 只是
+        // 同一次说话的中间快照，它的等待不属于「这一轮等 VAD 收口」）。
+        // 别把它和 hold_s 混起来：那个是输出侧宽限的区间并集。
+        if (accepted && input.IsFinal && gateWaitSeconds >= GateWaitReportSeconds)
+        {
+            _latency?.GetOrCreateForTurn(input.TurnId, input.TurnRevision)
+                ?.RecordVadSettle(gateWaitSeconds);
+        }
+
+        if (!accepted)
+        {
+            // 这一修订被后来的话作废了，不会有响应来认领它的待定账目。
+            // 不摘掉的话，待定槽位会一直挂着一条没人结算的记录（上游同一处置）。
+            _latency?.DiscardPendingTurn(input.TurnId, input.TurnRevision);
             yield break;
         }
 
         List<PipelineMessage> messages;
+        var startedAt = Monotonic.NowSeconds();
         try
         {
             messages = _backend.Transcribe(input, Stopping).ToList();
@@ -62,6 +112,12 @@ public sealed class SttHandler : BaseHandler<VadAudio, PipelineMessage>
                 },
             ];
         }
+
+        // 只量转写本身：闸门等待与排队都不该算进 stt_s，否则「模型慢」和「管线堵」分不开。
+        // 挂在待定槽位上而不是直接写响应：此刻响应键通常还不存在，就地把测量丢掉
+        // 会让 stt_s 永久为 null（这是上游 record_final_stt 存在的全部理由）。
+        _latency?.GetOrCreateForTurn(input.TurnId, input.TurnRevision)
+            ?.RecordStt(Monotonic.NowSeconds() - startedAt);
 
         foreach (var message in messages)
         {
@@ -182,8 +238,13 @@ public sealed class TranscriptionNotifier : BaseHandler<PipelineMessage, object>
                         SpeechStoppedAtSeconds = final.SpeechStoppedAtSeconds,
                     });
 
-                    // 仍要流向 LLM 队列，供生成阶段使用
-                    yield return final;
+                    // **不**往下游（LLM 队列）转发最终转写。
+                    //
+                    // 生成请求由 RealtimeService 在消费这条 completed 事件时创建——它才知道
+                    // 会话配置（是否自动回复、逐响应覆盖）。这里再塞一份会让 LM 队列里多出
+                    // 一条类型不对的消息：真跑时表现为每个服务端警告
+                    // 「unexpected input type Transcription」，而回复仍然由另一条路径产生。
+                    // 上游 `TranscriptionNotifier` 在 Transcription 分支里只发事件、不返回。
                     break;
                 }
 
@@ -194,7 +255,8 @@ public sealed class TranscriptionNotifier : BaseHandler<PipelineMessage, object>
                     TurnId = failure.TurnId,
                     TurnRevision = failure.TurnRevision,
                 });
-                yield return failure;
+
+                // 同理不转发：失败也不是一个「该回答」的输入。
                 break;
 
             default:

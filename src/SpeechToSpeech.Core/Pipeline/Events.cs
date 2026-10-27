@@ -164,6 +164,14 @@ public sealed class AssistantResponseDoneEvent : PipelineEvent
     public ResponseIncompleteReason Reason { get; init; } = ResponseIncompleteReason.None;
     public string? ResponseKey { get; init; }
     public List<string> InputToolCallIds { get; init; } = [];
+
+    /// <summary>
+    /// 这一轮是否算数。false 表示轮次已被后来的话作废：照常收口，但不写进聊天历史。
+    /// 上游 <c>ResponseGenerationDoneEvent.succeeded</c> 的等价物——它买的就是这件事，
+    /// 不发这个标志的话「收口」和「记进历史」会被绑死成同一个动作。
+    /// </summary>
+    public bool Succeeded { get; init; } = true;
+
     public int? CancelGeneration { get; init; }
 }
 

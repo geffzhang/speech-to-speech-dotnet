@@ -224,6 +224,18 @@ public sealed class TtsInputTests
 public sealed class RuntimeConfigTests
 {
     [Fact]
+    public void ApplySessionUpdate_MergesMaxResponseOutputTokens()
+    {
+        var config = new RuntimeConfig();
+        config.ApplySessionUpdate(new System.Text.Json.Nodes.JsonObject
+        {
+            ["max_response_output_tokens"] = 16,
+        });
+
+        Assert.Equal(16, config.MaxResponseOutputTokens);
+    }
+
+    [Fact]
     public void ApplySessionUpdate_OnlyMergesExplicitFields()
     {
         var config = new RuntimeConfig();

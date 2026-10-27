@@ -35,6 +35,13 @@ public static class TranscriptLog
     }
 
     /// <summary>
+    /// 一条 INFO 记录。写 stderr 而不是 stdout：上游 <c>logging</c> 的默认 handler 就是 stderr，
+    /// 而 stdout 在 <c>local</c> / <c>talk</c> 模式下留给语音转写——
+    /// 混在一起的话，把输出重定向到文件的人分不清哪一行是日志。
+    /// </summary>
+    public static void Info(string message) => Console.Error.WriteLine(message);
+
+    /// <summary>
     /// 记录一次异常，不向调用方抛出。
     ///
     /// 上游用同一入口把管线里的异常写进日志：处理线程绝不能因为一次失败而退出。

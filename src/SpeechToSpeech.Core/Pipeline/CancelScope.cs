@@ -60,6 +60,22 @@ public sealed class CancelScope
     /// <summary><paramref name="generation"/> 是否已被 <see cref="Cancel"/> 超越。</summary>
     public bool IsStale(int generation) => generation != Generation;
 
+    /// <summary>
+    /// 发送循环是否应丢弃带该代际标记的输出。上游 <c>_generation_is_discardable</c> 的等价物。
+    ///
+    /// <para>
+    /// 判据是**两条**，不是「<see cref="Discarding"/> 为真就全丢」：被超越的代际要丢；
+    /// 处于丢弃窗口内、但又不是当前代际的要丢。第二条里「不是当前代际」这个限定不能省——
+    /// 打断之后 <see cref="Discarding"/> 会一直亮着（打断路径不会走到 <see cref="ResponseDone"/>），
+    /// 只看它的话，打断后用户说的下一句话的回复会被整段静默吞掉：客户端收到
+    /// <c>response.created</c>、等到 <c>response.done</c>，中间一个字都没有，而服务端日志
+    /// 一切正常。这个缺陷声音里听不出来，日志里也查不出来。
+    /// </para>
+    /// </summary>
+    public bool IsDiscardable(int? generation)
+        => (generation is { } value && IsStale(value))
+           || (Discarding && (generation is null || generation.Value != Generation));
+
     /// <summary>发送循环是否应静默丢弃过期输出。</summary>
     public bool Discarding => Volatile.Read(ref _discarding) != 0;
 

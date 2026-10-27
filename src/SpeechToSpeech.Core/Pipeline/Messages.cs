@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json.Nodes;
 using SpeechToSpeech.Core.Runtime;
 
 namespace SpeechToSpeech.Core.Pipeline;
@@ -244,6 +245,14 @@ public sealed class TtsInput : PipelineMessage
     public string? ResponseAssistantLanguageCode { get; init; }
     public RuntimeConfig? RuntimeConfig { get; init; }
     public RealtimeResponseCreateParams? Response { get; init; }
+
+    /// <summary>
+    /// 本轮合成要用的音色，构造时定格。
+    ///
+    /// 取值顺序与协议载荷一致（响应级 → 会话级）。两处共用一次判断，是为了避免
+    /// 「载荷换了音色、合成还用旧的」这类只能靠听才发现的分歧。
+    /// </summary>
+    public string? Voice { get; init; }
     public string? TurnId { get; init; }
     public int? TurnRevision { get; init; }
     public double? SpeechStoppedAtSeconds { get; init; }
@@ -252,6 +261,13 @@ public sealed class TtsInput : PipelineMessage
     public ResponsePrefetchTransaction? PrefetchTransaction { get; init; }
 
     /// <summary>复现上游 <c>TTSInput.snapshot_language</c> 的取值规则。</summary>
+    /// <param name="language">
+    /// 已由 <see cref="ResponseLanguageResolver"/> 解析好的四元组。
+    ///
+    /// 给了就用它，不再在这里重算——语言解析要跨分片保持状态（一轮只解析一次），
+    /// 那是消息本身表达不了的东西。两处各算一份，就会出现「第一片按 auto 解析、
+    /// 第二片按配置重算」的分叉。
+    /// </param>
     public static TtsInput Create(
         string text,
         RuntimeConfig? runtimeConfig = null,
@@ -261,8 +277,32 @@ public sealed class TtsInput : PipelineMessage
         int? cancelGeneration = null,
         ResponsePrefetchTransaction? prefetchTransaction = null,
         string? turnId = null,
-        int? turnRevision = null)
+        int? turnRevision = null,
+        RealtimeResponseCreateParams? response = null,
+        TtsLanguageResolution? language = null,
+        double? speechStoppedAtSeconds = null)
     {
+        if (language is { } resolvedLanguage)
+        {
+            return new TtsInput
+            {
+                Text = text,
+                RuntimeConfig = runtimeConfig,
+                Response = response,
+                Voice = RealtimeResponseCreateParams.ResolveVoice(response, runtimeConfig),
+                LanguageCode = resolvedLanguage.LanguageCode,
+                SelectedLanguage = resolvedLanguage.SelectedLanguage,
+                TtsLanguageCode = resolvedLanguage.TtsLanguageCode,
+                ResponseAssistantLanguageCode = resolvedLanguage.ResponseAssistantLanguageCode,
+                ResponseKey = responseKey,
+                CancelGeneration = cancelGeneration,
+                PrefetchTransaction = prefetchTransaction,
+                TurnId = turnId,
+                TurnRevision = turnRevision,
+                SpeechStoppedAtSeconds = speechStoppedAtSeconds,
+            };
+        }
+
         var resolvedSelected = selectedLanguage ?? runtimeConfig?.SelectedLanguage;
         var ttsLanguage = resolvedSelected switch
         {
@@ -274,6 +314,10 @@ public sealed class TtsInput : PipelineMessage
         {
             Text = text,
             RuntimeConfig = runtimeConfig,
+            Response = response,
+            // 音色在这里定格一次。协议层用同一个 ResolveVoice 取值，所以「报的」与「合成的」
+            // 出自同一个判断——否则客户端换了音色、载荷也跟着变，声音却还是旧的。
+            Voice = RealtimeResponseCreateParams.ResolveVoice(response, runtimeConfig),
             LanguageCode = languageCode,
             SelectedLanguage = resolvedSelected,
             TtsLanguageCode = ttsLanguage,
@@ -282,6 +326,7 @@ public sealed class TtsInput : PipelineMessage
             PrefetchTransaction = prefetchTransaction,
             TurnId = turnId,
             TurnRevision = turnRevision,
+            SpeechStoppedAtSeconds = speechStoppedAtSeconds,
         };
     }
 }
@@ -487,6 +532,15 @@ public sealed class GenerateResponseRequest : PipelineMessage
     public double? SpeechStoppedAtSeconds { get; init; }
     public ResponsePrefetchTransaction? PrefetchTransaction { get; init; }
 
+    /// <summary>
+    /// 带外响应的 <c>response.input</c> 原始数组（未校验）。
+    ///
+    /// null = 未携带（读会话副本）；空数组与非空数组都原样传给 LM handler，
+    /// 由它在校验失败时走 <c>response.failed</c>——与上游 build_active_chat
+    /// 抛 ChatItemError 的时机一致。带内 input 不走这里（连接层校验后直接进会话）。
+    /// </summary>
+    public List<JsonObject>? InputItems { get; init; }
+
     /// <summary>复现上游 <c>snapshot_selected_language</c>：未显式给出时取会话快照。</summary>
     public static GenerateResponseRequest Create(
         RuntimeConfig runtimeConfig,
@@ -498,8 +552,10 @@ public sealed class GenerateResponseRequest : PipelineMessage
         string? languageCode = null,
         string? turnId = null,
         int? turnRevision = null,
+        double? speechStoppedAtSeconds = null,
         ResponsePrefetchTransaction? prefetchTransaction = null,
-        string? responseKey = null)
+        string? responseKey = null,
+        List<JsonObject>? inputItems = null)
         => new()
         {
             ResponseKey = responseKey ?? Guid.NewGuid().ToString("N"),
@@ -512,7 +568,9 @@ public sealed class GenerateResponseRequest : PipelineMessage
             LanguageCode = languageCode,
             TurnId = turnId,
             TurnRevision = turnRevision,
+            SpeechStoppedAtSeconds = speechStoppedAtSeconds,
             PrefetchTransaction = prefetchTransaction,
+            InputItems = inputItems,
         };
 }
 

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>SpeechToSpeech.Tools.VadProbe</RootNamespace>
+    <Description>VAD 冒烟探针：把一段 wav 直接喂进 Silero 后端，打印每个帧事件。用来区分「后端没切段」与「管线没接线」。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.ManySpeech\SpeechToSpeech.Backends.ManySpeech.csproj" />
+  </ItemGroup>
+
+</Project>
