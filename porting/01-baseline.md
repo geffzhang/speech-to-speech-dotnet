@@ -35,10 +35,11 @@
 | 后端处理器（各 TTS/STT/ASR/LLM） | 633 | 每个后端在 C# 侧要么走统一契约（`ISttBackend` 等），要么根本没运行时；照抄单测等于测别人的库 | D010 |
 | `openai_realtime/`（WebRTC、Agents SDK、会话删除） | 588 | WebRTC 未移植；Agents SDK 是 Python 生态绑定 | D003 |
 | VAD 长程状态机（stitching、grace、progressive pause） | 约 200 | 依赖 `SmartTurn` 与 progressive 快照，属 C006 同族 | C006 / D005 |
-| `evals/`（Big Bench Audio 评测套件） | 85 | 评测框架未移植 | D009 |
+| `evals/`（Big Bench Audio 评测套件） | 85 | 已移植（`src/SpeechToSpeech.Evals` + `tools/EvalProbe`） | D030 |
 | `tool_call/`（函数签名解析） | 74 | 工具调用解析在 C# 侧走 `AssistantToolCallPart` 直通，无独立解析层 | D009 |
 | 设备/延迟基准（`test_torch_num_threads` 等） | 约 30 | Python 运行时特有（GIL、torch 线程数） | C001 |
-| 说话人分离、口型 | 约 40 | 未移植 | D009 |
+| 口型（STV） | 约 200 | 已移植：引擎 D031（OpenLipSync）+ 管线级/事件/配置 D032 | — |
+| 说话人分离（diarization） | 约 40 | 未移植（无 C# speaker embedding 运行时） | D009 |
 
 ---
 

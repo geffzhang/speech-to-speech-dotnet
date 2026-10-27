@@ -22,7 +22,7 @@
   - 差分语料 `corpus/lang` —— **15/15 通过**（基线由上游 `language_detection.py` + `lingua-py` 录制，与 `lingua-rs` 封装逐值比对）
   - 差分语料 `corpus/smart-turn` —— **13/13 通过**（基线由上游 `_smart_turn_timing_ms` / `_prepare_audio` 在脚本化判定器下录制）
   - 差分语料 `corpus/latency` —— **16/16 通过**（基线由上游 `TurnLatencyStore` / `TurnLatencyTracker` 录制，metadata 字符串与日志行逐字符比对）
-  - 协议覆盖审计 `tools/refprobe/protocol_coverage.py` —— 上游 26 种事件，本实现可构造 **25 种（96%）**，唯一缺口是扩展事件 visemes（D009）
+  - 协议覆盖审计 `tools/refprobe/protocol_coverage.py` —— 上游 26 种事件，本实现可构造 **26 种（100%）**（扩展事件 visemes 于 D032 补上）
   - 官方 schema `tools/refprobe/schema_dump.py` —— 导出 `openai 2.28.0` 的 46 种服务端事件及其必填字段
   - `speech-to-speech talk` —— 音频后端创建已验（Windows：`WasapiPlayerBuilder` 共享模式 + `WaveIn`），失败点在 `ConnectAsync` 而非设备初始化，说明 NAudio 调用链正常
 
@@ -69,8 +69,8 @@
 ## 协议锁定
 
 - [x] 关键协议字段名与顺序由测试锁定 —— `ProtocolShapeTests` + `AssistantItemLifecycleTests` 共 25 例覆盖 24 类服务端事件、`event_id` 必带、错误嵌套结构、`response.done` 四终态、`response` 载荷完整性（usage / output_modalities / voice / conversation_id / output）、created 与 done 载荷同构、转写完成的必填 `usage`、助手消息项完整生命周期；另有 `corpus/protocol` **41 条**差分语料与上游逐字段比对（含编码，到 BMP 外的字符为止），锁定的是「与参照实现一致」而非仅「自证一致」
-- [x] 服务端事件覆盖 25/26（96%）—— `python tools/refprobe/protocol_coverage.py` 可复跑。唯一缺口是扩展事件 `speech_to_speech.output_audio.visemes`（D009）。原先缺的 9 类（含官方客户端渲染入口 `output_item.added` / `content_part.added`）已补齐并进语料
-- [x] 跨语言数字范围已校验（±2^53−1）—— `ServerEvent` 全部数值参数据查为 `int`（`audio_start_ms` / `audio_end_ms` / `output_index`），**无 `long`/`double` 上线**；延迟统计用秒级 `double`，只留在 `TurnLatencyStore` 内部，不出线。故不存在精度越界
+- [x] 服务端事件覆盖 26/26（100%）—— `python tools/refprobe/protocol_coverage.py` 可复跑。扩展事件 `speech_to_speech.output_audio.visemes` 于 D032 补上（开启 `--enable_visemes` 时发）。原先缺的 9 类（含官方客户端渲染入口 `output_item.added` / `content_part.added`）已补齐并进语料
+- [x] 跨语言数字范围已校验（±2^53−1）—— `ServerEvent` 的计数/索引类参数均为 `int`（`audio_start_ms` / `audio_end_ms` / `output_index`），不出 `long`；延迟统计用秒级 `double`，只留在 `TurnLatencyStore` 内部。**唯一带 `double` 上线的是 D032 的口型事件**（`visemes[].start_s/end_s`），值域 [0, 响应音频时长]、量化到 10 ms，与上游 float 载荷同形，远离 2^53，不存在精度越界
 - [x] 编码与行尾归一化策略已确定 —— 出线 UTF-8 文本帧 + 紧凑 JSON（`WriteIndented = false`，`separators` 效果等价于上游的 `,`/`:` 无空格），**不含换行**；`Encoder = UnsafeRelaxedJsonEscaping` 保证中文与 base64 的 `+` `/` 不被转义成 `\uXXXX`，与上游 Starlette `send_json`（`ensure_ascii=False`）一致（C012，已验证）。入线同解码，`input_audio_buffer.append` 走 base64 二进制而非文本
 
 ## 轮次状态机锁定
@@ -387,3 +387,28 @@ resolved）、C033（口型集合 OVR15→MS21 与产出方式差异，accepted�
 测试 **401/401**（+20），全解决方案 0 警告 0 错误。Core 侧 `Viseme` record 修正为上游形状
 `{viseme 0-21, start_s, end_s}`（此前是错误脚手架 `(Value, OffsetSeconds, DurationSeconds)`，
 无消费者，安全改形）。
+
+### 口型管线级接线（2026-10-27，D032 收口）
+
+D009 的口型部分收口：引擎（D031）之外，管线级、事件与配置面本轮补齐。验收分四层：
+
+1. **时序语义（与上游逐条对齐）**：0.5 秒整窗一次推理（窗口 = 管线率 × 0.5）、区间时间 =
+   窗口内相对时间 + 已推理样本数 / 管线率、窗口音频按 32 ms 等价块（上游 512@16k）重发、
+   口型只挂首块、终态事件前先把尾巴冲出来、`cleanup_only` 不冲、上下文（response_key + 代际）
+   切换与会话结束都重置偏移、陈旧代际整窗丢弃。以上每条都有单测（`StvHandlerTests` 14 例）。
+2. **失败不改音频**：提取抛异常只丢口型，音频照发（上游 `speech_to_visemes` 内部 except 同口径）；
+   奇数字节整块丢弃并记日志，线程不死。
+3. **线上形状**：`speech_to_speech.output_audio.visemes` 带 `response_id/item_id/output_index/
+   content_index=0/visemes[]`，数组元素 `{viseme, start_s, end_s}`，键名 snake_case 由测试锁定；
+   顺序是**先事件后音频块**，发完事件重新校验响应仍在（陈旧音频不得借事件把已收口的响应重新打开）。
+   协议覆盖审计 `tools/refprobe/protocol_coverage.py` 从 25/26 升到 **26/26 = 100%**。
+4. **开关行为**：`--enable_visemes` 默认关；关时管线里根本没有这一级（TTS 直连发送队列，
+   发送路径与接线前逐字节相同），`AudioOutput.Visemes` 无生产者、visemes 事件永不发出。
+   打开却缺模型时启动即失败并给出明确路径（上游 FileNotFoundError 同口径）。
+
+真跑：`serve --enable_visemes --stv_model_dir models/viseme` 启动正常（模型按连接懒加载）；
+引擎级端到端（真实 ONNX 模型下的窗口覆盖与流式不变性）由 `SPEECH_TO_SPEECH_VISEME_MODEL_DIR` 门控。
+
+账本动作：D009 缩窄为「流式说话人分离」（gap 维持，唯一剩余架构性缺口）；D013 从 25/26 更新为
+26/26；新增 D032（口型管线级，resolved）、C034（区间密度：上游音素稀疏 vs 本引擎整窗连续，accepted）。
+差异账 **68 条（resolved 50 / accepted 17 / gap 1）**，测试 **415/415**（+14），全解决方案 0 警告 0 错误。
