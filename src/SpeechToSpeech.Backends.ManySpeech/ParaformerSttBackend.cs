@@ -52,7 +52,7 @@ public sealed class ParaformerSttBackend : ManySpeechSttBackendBase
         var result = recognizer.GetResult(stream);
 
         // ManySpeech.AliParaformerAsr 1.1.9 的结果实体没有 Language 字段
-        // （SenseVoice 模型本身会判语言，但包未暴露）。见差异账 D-04。
+        // （SenseVoice 模型本身会判语言，但包未暴露）。见差异账 D004。
         return (result.Text ?? string.Empty, null);
     }
 

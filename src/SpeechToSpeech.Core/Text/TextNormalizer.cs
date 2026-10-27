@@ -12,7 +12,7 @@ namespace SpeechToSpeech.Core.Text;
 /// <item>强调标记只在保守的词边界成对移除，词中星号（乘法）保留；</item>
 /// <item>不可朗读字符（emoji、控制符等）在流式增量上逐段过滤是安全的。</item>
 /// </list>
-/// 分句器本身不再用 NLTK Punkt（见差异账 C-05），改用确定性规则。
+/// 分句器本身不再用 NLTK Punkt（见差异账 C005），改用确定性规则。
 /// </summary>
 public static partial class TextNormalizer
 {

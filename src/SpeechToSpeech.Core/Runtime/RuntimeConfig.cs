@@ -10,7 +10,7 @@ namespace SpeechToSpeech.Core.Runtime;
 /// 规范性状态保存在 <see cref="Session"/>（原始 JSON）里，而不是分散到强类型字段：
 /// 上游用 Pydantic 的 <c>model_fields_set</c> 表达"只合并客户端真正发来的字段"，
 /// C# 的强类型模型无法区分"未设置"与"显式设为 null"，因此这里保留原始 JSON 做深合并，
-/// 再通过只读访问器提供强类型视图（见差异账 C-04）。
+/// 再通过只读访问器提供强类型视图（见差异账 C004）。
 /// </summary>
 public sealed class RuntimeConfig
 {

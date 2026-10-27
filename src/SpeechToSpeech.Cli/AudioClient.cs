@@ -24,7 +24,7 @@ namespace SpeechToSpeech.Cli;
 /// 抛 <see cref="InvalidOperationException"/> 或让帧交错。同时重采样也不该占着音频回调，
 /// 那会拖慢下一次读取、造成驱动侧溢出。
 ///
-/// 设备后端由 <see cref="AudioDevices"/> 按平台选择，见差异账 E-01。
+/// 设备后端由 <see cref="AudioDevices"/> 按平台选择，见差异账 E001。
 /// </summary>
 internal sealed class AudioClient : IAsyncDisposable
 {

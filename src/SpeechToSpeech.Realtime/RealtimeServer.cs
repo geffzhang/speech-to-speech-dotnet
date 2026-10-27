@@ -14,7 +14,7 @@ namespace SpeechToSpeech.Realtime;
 /// Realtime 服务端宿主。
 ///
 /// 只暴露一条路径：<c>GET /v1/realtime</c>（WebSocket 升级）。
-/// 上游把 WebRTC 作为第二条传输并列；C# 首期只有 WebSocket，见差异账 D-03。
+/// 上游把 WebRTC 作为第二条传输并列；C# 首期只有 WebSocket，见差异账 D003。
 /// </summary>
 public sealed class RealtimeServer
 {

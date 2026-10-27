@@ -17,7 +17,7 @@ namespace SpeechToSpeech.Backends.TensorSharp;
 /// <list type="number">
 /// <item><b>单并发。</b>TensorSharp 的 <see cref="ModelService"/> 是内在单会话的，
 ///       文档明确要求调用落在它的推理队列里。这里用信号量把所有生成串行化，
-///       代价是多连接时会排队（见差异账 D-07）。</item>
+///       代价是多连接时会排队（见差异账 D007）。</item>
 /// <item><b>句级切分在适配器里做。</b>模型按 token 吐，TTS 要按句吃；
 ///       中间这层缓冲是延迟与音质的折中点，放在后端最合适——换后端不必重写策略。</item>
 /// </list>

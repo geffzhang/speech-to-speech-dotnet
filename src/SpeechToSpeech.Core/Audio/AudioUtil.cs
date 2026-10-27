@@ -6,7 +6,7 @@ namespace SpeechToSpeech.Core.Audio;
 /// 音频转换工具。
 ///
 /// 上游依赖 torchaudio / scipy / soxr 做重采样；C# 侧没有等价依赖，故自带实现。
-/// 降采样走"整数倍抽取 + FIR 低通"，非整数倍走线性插值，质量差异由差异账 C-09 登记。
+/// 降采样走"整数倍抽取 + FIR 低通"，非整数倍走线性插值，质量差异由差异账 C009 登记。
 /// </summary>
 public static class AudioUtil
 {

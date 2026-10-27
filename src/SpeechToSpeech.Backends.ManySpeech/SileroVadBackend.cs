@@ -15,7 +15,7 @@ namespace SpeechToSpeech.Backends.ManySpeech;
 /// <item>分段权威：仍由 Silero VAD 决定语音段边界与切出的音频；</item>
 /// <item>开口近似：前面串一道能量门限，超阈值即报 <see cref="VadFrameKind.SpeechStarted"/>。</item>
 /// </list>
-/// 差异与理由见 <c>porting/02-differences.md</c> D-02。
+/// 差异与理由见 <c>porting/02-differences.md</c> D002。
 /// </summary>
 public sealed class SileroVadBackend : IVadBackend
 {

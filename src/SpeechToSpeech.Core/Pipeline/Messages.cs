@@ -167,7 +167,7 @@ public sealed class LlmResponseChunk : PipelineMessage
     ///
     /// 两条来源都要认：新后端只填 <see cref="Parts"/>，老后端只填 <see cref="Text"/>。
     /// 上游在两者冲突时抛 <c>ValueError</c>；这里取"显式 Parts 优先"，
-    /// 由差异账 C-08 记录这处容错差异。
+    /// 由差异账 C008 记录这处容错差异。
     /// </summary>
     public LlmResponseChunk Normalize()
     {
@@ -597,7 +597,7 @@ public sealed class GenerateResponseRequest : PipelineMessage
         };
 }
 
-/// <summary>管线二进制哨兵的具名包装（见差异账 C-03）。</summary>
+/// <summary>管线二进制哨兵的具名包装（见差异账 C003）。</summary>
 public static class PipelineSentinels
 {
     /// <summary>对应上游 <c>b"END"</c>：放入队列以避免阻塞死锁。</summary>

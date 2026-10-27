@@ -40,7 +40,7 @@ public sealed class ToolCallRef
 /// 一次连接的会话状态：LLM 上下文 + 提交代际。
 ///
 /// 这是 <see cref="RuntimeConfig"/> 里被多阶段共享的可变部分，也是"唯一写入口"：
-/// 只有 realtime 服务（以及工具跟进）可以追加消息，管线线程只读（见差异账 C-02）。
+/// 只有 realtime 服务（以及工具跟进）可以追加消息，管线线程只读（见差异账 C002）。
 /// </summary>
 public sealed class ChatSession
 {

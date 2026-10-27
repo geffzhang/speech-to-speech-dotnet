@@ -5,7 +5,7 @@ namespace SpeechToSpeech.Core.Pipeline;
 ///
 /// VAD 与转写事件走 <c>text_output_queue</c>；依赖响应的助手事件与 token 用量事件
 /// 与对应音频共用 TTS 输出队列，以保证模型原始的文本/工具/音频顺序。
-/// <see cref="EventType"/> 与协议事件名不同：协议名由 realtime 层决定（见差异账 C-07）。
+/// <see cref="EventType"/> 与协议事件名不同：协议名由 realtime 层决定（见差异账 C007）。
 /// </summary>
 public abstract class PipelineEvent
 {

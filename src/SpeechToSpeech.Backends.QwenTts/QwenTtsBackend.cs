@@ -14,7 +14,13 @@ namespace SpeechToSpeech.Backends.QwenTts;
 ///
 /// 一个必须承认的差异：上游 Qwen3-TTS 逐帧流式吐 PCM，ElBruno 的 ONNX 管线是整句合成后
 /// 返回（<c>IsProgressive = false</c>）。补偿手段是句级切分——调用方按句喂，
-/// 首句音频仍然能在整段回答生成完之前就播出去。见差异账 D-01。
+/// 首句音频仍然能在整段回答生成完之前就播出去。见差异账 D001。
+///
+/// 这条差异最贵的地方不在首字延迟，而在**打断**：上游的合成是个生成器，每个 chunk
+/// 查一次代际，一命中就停，毫秒级收敛；这里一旦 <c>SynthesizeToPcmAsync</c> 开始，
+/// 就只能等它把这一句读完。真权重实测（2026-10-27）：被打断的那一轮仍在后台合成
+/// 82.7 秒（77 帧音频），期间下一轮全部在等这条 ONNX 会话，它的首包因此推迟 73 秒。
+/// 丢弃是对的（陈旧音频没有泄漏给客户端），但 CPU 白烧、下一轮白等。
 /// </summary>
 public sealed class QwenTtsBackend : ITtsBackend
 {

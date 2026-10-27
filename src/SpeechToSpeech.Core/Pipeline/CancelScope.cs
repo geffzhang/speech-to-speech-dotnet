@@ -8,7 +8,7 @@ namespace SpeechToSpeech.Core.Pipeline;
 ///
 /// 线程安全说明：上游注释称 Python GIL 使 int/bool 读写原子，因此无锁；
 /// C# 侧没有同等保证，故用 <see cref="Interlocked"/> 与 <see cref="Volatile"/> 显式表达
-/// 单写多读语义（见差异账 C-01）。
+/// 单写多读语义（见差异账 C001）。
 /// </summary>
 public sealed class CancelScope
 {
