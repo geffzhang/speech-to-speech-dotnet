@@ -32,6 +32,9 @@ internal static class Program
         string? pcmPath = null;
         string? embeddingPath = null;
         int probsChannel = -1;
+        bool trace = false;
+        var tracksAt = new List<double>();
+        double? probsWindowAt = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -55,13 +58,24 @@ internal static class Program
                 case "--probs":
                     probsChannel = int.Parse(args[++i], CultureInfo.InvariantCulture);
                     break;
+                case "--trace":
+                    trace = true;
+                    break;
+                case "--window-at":
+                    probsWindowAt = double.Parse(args[++i], CultureInfo.InvariantCulture);
+                    break;
+                case "--tracks-at":
+                    foreach (string part in args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries))
+                        tracksAt.Add(double.Parse(part, CultureInfo.InvariantCulture));
+                    break;
                 case "--metadata":
                     metadataOnly = true;
                     break;
                 default:
                     Console.Error.WriteLine(
                         $"未知参数 '{args[i]}'\n用法: DiarizationProbe [--model <path>] [--window <samples>] " +
-                        "[--seconds <n>] [--pcm <raw f32 16k mono>] [--embedding <path>] [--metadata]");
+                        "[--seconds <n>] [--pcm <raw f32 16k mono>] [--embedding <path>] [--probs <channel>] " +
+                        "[--tracks-at <s,...>] [--window-at <s>] [--trace] [--metadata]");
                     return 2;
             }
         }
@@ -118,6 +132,24 @@ internal static class Program
             var fitted = Fit(speech, windowSamples);
             report["tracks"] = TrackSpans(segmentation, fitted);
 
+            // 指定开窗位置的逐通道活动区间：状态机的时间线出现并行段时，第一件事就是确认
+            // 「是两条本地通道同时报了同一个人」还是「一次轮次被起点抖动切成了两条」——
+            // 这两件事在段列表上长得一样，在通道表上完全不同。
+            if (tracksAt.Count > 0)
+            {
+                var at = new JsonObject();
+                foreach (double startSeconds in tracksAt)
+                {
+                    int offset = (int)Math.Round(startSeconds * segmentation.SampleRate);
+                    var slice = new float[windowSamples];
+                    if (offset < speech.Length)
+                        Array.Copy(speech, offset, slice, 0, Math.Min(windowSamples, speech.Length - offset));
+                    at[Round(startSeconds).ToString("0.###", CultureInfo.InvariantCulture)] =
+                        TrackSpans(segmentation, slice);
+                }
+                report["tracks_at"] = at;
+            }
+
             // 逐帧概率：滞回（onset 0.5 / offset 0.35）到底是在哪断的，只有把曲线摊开才看得见。
             if (probsChannel >= 0)
             {
@@ -130,6 +162,47 @@ internal static class Program
                     ["channel"] = probsChannel,
                     ["frame_seconds"] = Round(segmentation.FrameShiftSamples / (double)segmentation.SampleRate),
                     ["values"] = values,
+                };
+            }
+
+            // 所有通道逐帧概率对齐成一张表：状态机一条轮次 = 某个通道上一段连续 >= onset 的帧。
+            // 「同一段语音被报成两条轨道」只有在多通道对照表上才看得见——单通道曲线只能告诉你哪里断过。
+            if (probsWindowAt is double probsAt)
+            {
+                int offset = (int)Math.Round(probsAt * segmentation.SampleRate);
+                var slice = new float[windowSamples];
+                if (offset < speech.Length)
+                    Array.Copy(speech, offset, slice, 0, Math.Min(windowSamples, speech.Length - offset));
+
+                var masks = segmentation.Analyze(slice);
+                double frameSeconds = segmentation.FrameShiftSamples / (double)segmentation.SampleRate;
+                var runs = new JsonArray();
+                for (int s = 0; s < segmentation.MaxLocalSpeakers; s++)
+                {
+                    var spans = new JsonArray();
+                    int start = -1;
+                    for (int f = 0; f <= masks.FrameCount; f++)
+                    {
+                        bool on = f < masks.FrameCount && masks.FrameProbabilities[f][s] >= 0.5;
+                        if (on && start < 0) start = f;
+                        else if (!on && start >= 0)
+                        {
+                            spans.Add(new JsonObject
+                            {
+                                ["frames"] = new JsonArray(start, f - 1),
+                                ["start_s"] = Round(probsAt + start * frameSeconds),
+                                ["end_s"] = Round(probsAt + f * frameSeconds),
+                            });
+                            start = -1;
+                        }
+                    }
+                    if (spans.Count > 0) runs.Add(new JsonObject { ["channel"] = s, ["runs"] = spans });
+                }
+                report["probs_window"] = new JsonObject
+                {
+                    ["window_start_s"] = Round(probsAt),
+                    ["frame_seconds"] = Round(frameSeconds),
+                    ["active_runs"] = runs,
                 };
             }
         }
@@ -169,16 +242,72 @@ internal static class Program
         // 同一段会被多次修订（按 Id upsert），所以按 Id 去重后再按说话人聚合——
         // 直接把每次推送加起来会把一段 3 秒的话记成 9 秒。
         var latest = new Dictionary<string, SpeakerSegmentUpdate>(StringComparer.Ordinal);
-        for (int offset = 0; offset + chunk <= stream.Length; offset += chunk)
+        var traceLog = new JsonArray();
+
+        // 窗口级轨迹：--trace 时改成「先灌满一个窗口、之后每次只推一个跳长」。
+        // 于是每次 Push 正好跑完**一个**窗口，段的「新建 / 延长 / 定稿」不会被合并进同一条记录——
+        // 状态机对推入的分块方式不该敏感（它内部是 while 循环），所以这种喂法与被测路径同解。
+        int step = trace ? diarizer.HopSamples : chunk;
+        int cursor = 0;
+
+        if (trace && stream.Length > diarizer.WindowSamples)
         {
-            var update = diarizer.Push(stream.AsSpan(offset, chunk));
+            cursor = diarizer.WindowSamples;
+            Feed(stream.AsSpan(0, cursor), windowStartSample: 0);
+        }
+
+        while (cursor < stream.Length)
+        {
+            int take = Math.Min(step, stream.Length - cursor);
+            if (take <= 0) break;
+            int end = cursor + take;
+            Feed(stream.AsSpan(cursor, take), end - diarizer.WindowSamples);
+            cursor = end;
+        }
+
+        var tail = diarizer.Flush();
+        segments += tail.Segments.Count;
+        merges += tail.Merges.Count;
+        foreach (var segment in tail.Segments) latest[segment.Id] = segment;
+        if (trace) Record(tail, windowStartSample: null);
+
+        void Feed(ReadOnlySpan<float> audio, double windowStartSample)
+        {
+            var update = diarizer.Push(audio);
             segments += update.Segments.Count;
             merges += update.Merges.Count;
             foreach (var segment in update.Segments) latest[segment.Id] = segment;
+            if (trace) Record(update, windowStartSample);
         }
-        var tail = diarizer.Flush();
-        segments += tail.Segments.Count;
-        foreach (var segment in tail.Segments) latest[segment.Id] = segment;
+
+        void Record(DiarizerUpdate update, double? windowStartSample)
+        {
+            if (update.Segments.Count == 0) return;
+            var fresh = new JsonArray();
+            var grew = new JsonArray();
+            var done = new JsonArray();
+            foreach (var segment in update.Segments)
+            {
+                var item = new JsonObject
+                {
+                    ["id"] = segment.Id,
+                    ["speaker"] = segment.Speaker,
+                    ["start_s"] = Round(segment.Start),
+                    ["end_s"] = Round(segment.End),
+                };
+                if (segment.Revision == 0) fresh.Add(item);
+                else if (segment.IsFinal) done.Add(item);
+                else grew.Add(item);
+            }
+
+            var entry = new JsonObject();
+            if (windowStartSample is double ws) entry["window_start_s"] = Round(ws);
+            else entry["window_start_s"] = null;
+            entry["new"] = fresh;
+            entry["extended"] = grew;
+            entry["final"] = done;
+            traceLog.Add(entry);
+        }
 
         report["stream"] = new JsonObject
         {
@@ -247,6 +376,8 @@ internal static class Program
             });
         }
         report["segments"] = timeline;
+
+        if (trace) report["trace"] = traceLog;
 
         Console.WriteLine(report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         return identical ? 0 : 1;
