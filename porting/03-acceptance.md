@@ -196,7 +196,15 @@
 - [ ] **容器内** —— 未做（E002）：无 Dockerfile、无发布包
 - [ ] **跨平台**（Windows / Linux / macOS）—— 代码路径齐备：`serve` 纯托管代码，理论跨平台；`talk`/`local` 音频后端三平台均接入——Windows（WASAPI + WinMM）、Linux（ALSA）、macOS（PortAudio，PortAudioSharp2 1.0.6，E001 已解决）。Windows 已实跑设备创建；**Linux 与 macOS 未在真实设备上跑过**（绑定冒烟 3 例通过）
 - [ ] **带真实音频设备的一轮对话** —— 仍未做：`local`/`talk` 需要真人对着麦克风说话，本轮用 `serve` + 脚本化客户端替代，验证的是同一套协议与管线
-- [x] **跨传输** —— 仅 WebSocket。WebRTC 未移植（D003），明确记为缺口而非「支持」
+- [x] **跨传输** —— WebSocket 与 WebRTC 双通路（D003 **已解决 2026-10-27**）。`SessionTransport` 抽象分出
+      `send_events` / `send_audio_chunk` / `discard_pending_audio` / `close` 四面，WebSocket 承接原 `socket` 路径；
+      WebRTC 侧 RTP 音频走 SIPSorcery `WebRtcSession`（Opus 48 kHz，Concentus 编解码），事件走 `oai-events` datachannel，
+      HTTP 面 `POST/DELETE /v1/realtime/calls` 已接（415/503 `session_limit_reached`/500/400/201+Location/404 逐字对齐）。
+      音频节拍与上游 `PipelineAudioTrack.recv()` 逐行对齐（首帧即时、RFC 7587 §3.1.3 整帧抑制、追赶用 ceil、
+      `waited_for_audio` 判据、5 帧编码器排空、重采样绝对输出游标使分块喂入等价于整块）。
+      验证：pacer/resampler 表征单测 10、门控 6、registry+503 体 9、SIPSorcery 进程内环回 5（真 HTTP + 真 SDP/ICE/DTLS/datachannel），
+      以及 `tools/smoke/webrtc_smoke.py` 用 aiortc 1.15 跨实现互证 PASS（415 / 201 / 连接 / `session.created` / append 门控 / DELETE）。
+      仍开放的只有 C029（会话 id 前缀 `conn_` vs 上游 `session_`，accepted：对客户端是不透明回传令牌）
 
 ## 未闭合风险
 

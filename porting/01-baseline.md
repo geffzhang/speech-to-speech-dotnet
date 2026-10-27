@@ -33,7 +33,7 @@
 | 上游范围 | 测试函数 | 未移植原因 | 归属 |
 |---|---|---|---|
 | 后端处理器（各 TTS/STT/ASR/LLM） | 633 | 每个后端在 C# 侧要么走统一契约（`ISttBackend` 等），要么根本没运行时；照抄单测等于测别人的库 | D010 |
-| `openai_realtime/`（WebRTC、Agents SDK、会话删除） | 588 | WebRTC 未移植；Agents SDK 是 Python 生态绑定 | D003 |
+| `openai_realtime/`（WebRTC、Agents SDK、会话删除） | 588 | WebRTC 与 call 端点（含 DELETE 挂断）**已移植**（D003，SIPSorcery + Concentus，不引 aiortc），但上游 pytest 不照抄——行为改以 C# 侧表征单测（pacer/resampler）+ 进程内环回 + aiortc 跨实现冒烟对拍；Agents SDK 是 Python 生态绑定 | D003 |
 | VAD 长程状态机（stitching、grace、progressive pause） | 约 200 | 依赖 `SmartTurn` 与 progressive 快照，属 C006 同族 | C006 / D005 |
 | `evals/`（Big Bench Audio 评测套件） | 85 | 已移植（`src/SpeechToSpeech.Evals` + `tools/EvalProbe`） | D030 |
 | `tool_call/`（函数签名解析） | 74 | 工具调用解析在 C# 侧走 `AssistantToolCallPart` 直通，无独立解析层 | D009 |
