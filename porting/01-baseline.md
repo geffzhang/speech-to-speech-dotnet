@@ -49,14 +49,22 @@
 | 语料 | 守护的行为 | 条数 | 结果 |
 |---|---|---|---|
 | `corpus/text/` | `remove_unspeechable` / `remove_markdown` / 分句（含缩写、连续标点、围栏与行内代码、标题与列表、强调、snake_case、未闭合围栏、URL 与邮箱、空与纯空白） | 15 | **15 通过** |
-| `corpus/protocol/` | 线路形状：9 类服务端事件的字段集、值类型、JSON 编码（UTF-8 不转义、base64 特殊字符不转义） | 12 | **12 通过** |
+| `corpus/protocol/` | 线路形状：26 类服务端事件的字段集、值类型、JSON 编码（UTF-8 不转义、base64 特殊字符不转义、BMP 外字符不转义、转义集合只含引号/反斜杠/控制字符），含四条终态、`response` 载荷（created + 四种终态）与转写完成的必填 `usage` | 36 | **36 通过** |
+| `corpus/turns/` | 状态迁移：裁决（accept/hold/drop）、轮次标识、复开宽限与处理期限，在虚拟时钟下逐步比对 | 13 | **13 通过** |
+| `corpus/lang/` | 语言判定：长度门槛、CJK 放宽、置信度差、`nb`→`no` 归一化、256 码点窗口的累积与截断 | 15 | **15 通过** |
+| `corpus/smart-turn/` | 端点判定：结论到宽限/处理延迟的四条分支（含阈值等号、延迟钳制、异常回落）、判定器输入窗口的取尾与左补零 | 13 | **13 通过** |
+| `corpus/latency/` | 响应时延账：待定槽位吸收、E2E 名额只发一次、会话清理作用域、等待区间并集、metadata 压缩 JSON 与日志行的逐字符形态 | 16 | **16 通过** |
 
-**状态：文本层与协议形状层已闭合，音频层仍缺口。**
+**状态：文本层、协议形状层、轮次状态机层、语言层、端点判定决策层与时延账层已闭合，音频层仍缺口。**
 
 录制环境（可复现前提）：Python 3.13 + `nltk 3.10.4` + `punkt_tab` + `pillow` + `requests`；
 协议层另需 `openai 2.28.0`（与上游 `pyproject.toml` 锁定的版本一致）+ `numpy` + `scipy`。
-探针四条：`tools/refprobe/text_probe.py` / `tools/TextProbe`（文本层），
-`tools/refprobe/protocol_probe.py` / `tools/ProtocolProbe`（协议层），各自输出同形 JSON。
+探针六对：`tools/refprobe/text_probe.py` / `tools/TextProbe`（文本层），
+`tools/refprobe/protocol_probe.py` / `tools/ProtocolProbe`（协议层），
+`tools/refprobe/turns_probe.py` / `tools/TurnsProbe`（轮次层），
+`tools/refprobe/lang_probe.py` / `tools/LanguageProbe`（语言层），
+`tools/refprobe/smart_turn_probe.py` / `tools/SmartTurnProbe`（端点判定层），
+`tools/refprobe/latency_probe.py` / `tools/LatencyProbe`（时延账层），各自输出同形 JSON。
 
 实测结论——这层比预期更干净：
 
@@ -70,23 +78,90 @@
 
 音频层仍不可比对：模型推理受浮点累加顺序影响，只能锁「采样率、声道、位深、段数、时长误差带」，不锁样本值。
 
-**协议层的实测结论**（`corpus/protocol/`，28 条）：
+**协议层的实测结论**（`corpus/protocol/`，36 条）：
 
 - 转写链路与渲染链路的全部事件**字段集、值类型、编码逐字节一致**，含中文与
   含 `+` `/` 的 base64；
-- 发现并修掉三个真实缺陷：
+- 发现并修掉七个真实缺陷：
   1. 本实现原先用默认 `JavaScriptEncoder` 序列化，中文被转成 `\uXXXX`（汉字 3 字节变 6 字节）、
      base64 里的 `+` 被转成 `\u002B`；上游走 Starlette 的 `send_json`（`ensure_ascii=False`）不转义。
      已改 `UnsafeRelaxedJsonEscaping`（C012）；
   2. 助手消息项的生命周期整段缺失，官方客户端因此建不出消息项（D013）。已按上游顺序补齐；
   3. 转写失败原先借用全局 `error`，会让客户端误判整条连接出错。已改为
-     `conversation.item.input_audio_transcription.failed`（C014）。
-- 仍有 2 类**没有进语料**，原因是载荷结构差异已经确定：`transcription.completed` 缺 `usage`
-  （D011，官方 schema 必填）、`response.created` / `.done` 的 `response` 对象缺
-  `usage`/`output_modalities`/`conversation_id`（D012）。等补齐再纳入，避免 CI 长期标红。
+     `conversation.item.input_audio_transcription.failed`（C014）；
+  4. `response.done` 的 `status_details.type` 恒写 `incomplete`，取消时产出官方 schema 里
+     不存在的组合（C015）。已改为跟随 `status`；
+  5. `transcription.completed` 缺 `usage`——这不是「少个统计」，是整条事件被严格客户端拒收
+     （D011，官方 schema 必填）。已按上游口径发 `{type: "duration", seconds}`；
+  6. `response` 载荷只填了 `id`/`object`/`status`，缺 `usage`/`output_modalities`/
+     `conversation_id`/`output`（D012）。已由 `ResponseSnapshot` + `ServerEvent.BuildResponse`
+     单点组装，created 与 done 共用同一份口径；token 记账抽成 `ResponseUsageLedger`
+     （按 `response_key` 挂起、收口结转、已关闭 key 丢弃迟到用量），9 条用例锁定；
+  7. `status_details` 原先只在异常终态出现，`completed` 完全不带——上游对任何终态都发；
+     且 `failed` 的 `error` 上游只带 `type`，本实现多发 `code`/`message`（C016）。已修正；
+  8. `response.create` 里的 `audio.output.voice` 原先被忽略，音色只认会话配置（D017）。
+     现在响应级优先、会话级兜底，且同一个 `ResolveVoice` 同时喂协议载荷与 `TtsRequest.Speaker`。
+     这类缺陷有个共同特征：字段看着对，行为没跟上——所以锁它的是单测（值是否真的到了后端），
+     不是语料（语料只能证明字段在）。
+- 现在只剩 1 类**结构性差异**没有进语料：`response.metadata`（上游带 turn_latency 与工具输入
+  call_ids）本实现整个不发（D016）。不发而不是发空对象——空对象会表示「这轮没有遥测」，缺字段才
+  表示「本实现不上报」。
 
 覆盖缺口由 `tools/refprobe/protocol_coverage.py` 量化：上游 26 种事件，本实现可构造 **25 种（96%）**，
 唯一缺的是扩展事件 `speech_to_speech.output_audio.visemes`（归 D009，口型未移植）。
+
+**轮次层的实测结论**（`corpus/turns/`，13 条）：
+
+这层比的是状态迁移，不是字节。三个前提让逐值比对成立：状态机自包含（不碰模型/网络/磁盘）、
+期限全在单调时钟上（换成虚拟时钟即可确定性复现）、返回值是纯量（裁决 + 轮次 + 期限）。
+
+- 上游 488 行的 `SpeculativeTurnTracker` 逐方法对齐，20 个操作可脚本驱动；
+- 首次运行即 **13/13 一致**，包括 HOLD 期限的绝对秒值（`"1001.000000"` 这类）；
+- 三条不变量各有语料守着：挂起不等于丢弃、已提交的不可挂起、复开不推进序号；
+- 压不住的两块改由单测锁：阻塞式等待（探针会真睡在期限上，比对变成比谁更慢）、
+  并发（`threading.Condition` 与 `Monitor` 语义等价但调度不可复现）。
+
+**语言层的实测结论**（`corpus/lang/`，15 条）：
+
+这是唯一一层「同一个算法的两种语言实现互证」：上游 `lingua-py`，本实现用
+`Panlingo.LanguageIdentification.Lingua`（lingua 的 Rust 实现 `lingua-rs` 的 .NET 封装）。
+同模型、同算法、不同宿主机语言，所以两侧一致才有意义。
+
+- **15/15 逐值一致**，包括置信度差边界、`nb`→`no` 归一化、256 码点窗口的截断点；
+- 决策层（长度门槛 20、含 CJK/假名/谚文放宽到 4、置信度差 0.1）与检测器解耦，
+  因此能在没有原生库的机器上跑单测；
+- 窗口规则单独作为断言输出（`windows` 数组），不只比结论——结论只有两种取值，
+  窗口错了可能碰巧结论一样；
+- 一个必须接受的反直觉结果：`window-truncates` 里英文重复被判成 `pt`。那是截断后窗口的
+  真实判定，两侧相同。**验收标准是一致，不是合理**。
+
+**端点判定层的实测结论**（`corpus/smart-turn/`，13 条）：
+
+这一层比的是上游 `_smart_turn_timing_ms` 的映射规则：判定结论 → （输出宽限 ms，处理延迟 ms）。
+判定器被替换成脚本化替身，因为真正的分类器是 ONNX 模型、本轮没移植（D018）——
+而这正说明「判定」与「拿到判定之后怎么办」该拆开：后者是纯函数，前者才是缺口。
+
+- **13/13 一致**，含阈值等号（`probability == threshold` 算没说完，上游是严格大于）、
+  延迟大于最长等待时的钳制、判定器抛异常时的回落、以及窗口整理的取尾与左补零；
+- 参照侧没有 torch（PyPI 不可达），探针塞了一个桩模块让 `vad_handler` 导入通过——
+  被测的两个方法都不碰 torch，调的是上游源码本身而不是复制品；
+- 窗口样本按 float32 位模式比对而不是十进制：浮点的最短表示是两侧运行时各自的策略，
+  比它等于允许漂移。为了让失败可诊断，另带首尾样本、补零计数与整窗 FNV-1a 校验；
+- 音频不进语料文件，按 `((i*37) % 1000) / 1000.0` 现场生成——只用整数运算与一次
+  `double → float32` 转换，IEEE 转换确定性保证两侧逐位相同。
+
+**判定器本身是缺口**（D018）：`--smart_turn` 默认开着但没有实现，决策层走 `disabled`
+分支（宽限 800、处理延迟 0），启动时打印显式告警。补的时候只需实现 `ITurnEndClassifier`
+并注入，不必动 `VadHandler`。
+
+**时延账层的实测结论**（`corpus/latency/`，16 条）：
+
+这一层比的不是字节，是**状态迁移**加上两个逐字符的产物（metadata 里那段压缩 JSON、以及那行 INFO 日志）。时间全部由语料给定，所以没有抖动、也不需要容差。
+
+- **16/16 一致**，含待定槽位吸收、`pop` 之后不再复活、会话清理的作用域、E2E 名额在工具续接链上只发一次；
+- `hold_s` 记的是等待区间**并集**：两段重叠区间是 0.4 秒而不是相加的 0.6 秒；
+- 浮点写法是这一层最容易静默漂的地方。动手前先拿 12 个值在两侧各跑一遍格式化，确认 `.2f` 与 `F2` 连中点舍入都一致（`0.125 → 0.12`、`0.135 → 0.14`），而最短表示的默认写法真的不同：`2.0` vs `2`、`1e-07` vs `1E-07`。metadata 里存的就是那段字符串，数字相等不等于对客户端相等。
+- 上游对 `vad_decision_s` / `hold_s` 做 `round(x, 9)`，其余字段原样写。这条不对称容易被「统一保留几位小数」的直觉抹平。
 
 ---
 
@@ -101,7 +176,7 @@
 | `conversation.item.created` | `item.content` 是完整数组（语音为 `[input_audio]`，文本原样回带）、`previous_item_id` 指向链上前驱 | `AssistantItemLifecycleTests.ConversationItemCreated_*` / D014 |
 | `conversation.item.deleted` | 只带 `item_id`；删的是链尾时前驱回退 | `RealtimeConnection.HandleConversationItemDeleteAsync` |
 | `conversation.item.input_audio_transcription.failed` | item 作用域失败，`error.{type:transcription_error,code:transcription_failed,message}`，**不是**全局 `error` | `AssistantItemLifecycleTests.TranscriptionFailed_*` / C014 |
-| `response.created` | 携带 `response.id` / `object` / `status`。**未**带 `usage` / `output_modalities` / `conversation_id`（D012） | `ProtocolShapeTests` |
+| `response.created` | 与 `response.done` 同构：`id` / `object` / `status` / `audio.output.voice` / `conversation_id` / `output_modalities` / `output`(空) / `usage`(全 0)。唯一差异是终态才有的 `status_details` | `ProtocolShapeTests.Response_CreatedAndDoneShareTheSameFieldSet` |
 | `response.output_item.added` | 开一个 assistant 消息项：`status=in_progress`、`content` 为空数组 | `AssistantItemLifecycleTests.OutputItemAdded_*` |
 | `response.content_part.added` | 音频模态 part 为 `{type:audio,audio:"",transcript:""}`，纯文本模态为 `{type:text,text:""}` | `AssistantItemLifecycleTests.ContentPartAdded_*` |
 | `response.output_text.delta` / `.done` | 纯文本模态的增量与终稿（音频模态走 `output_audio_transcript.*`） | `ProtocolShapeTests` |
@@ -111,13 +186,13 @@
 | `response.output_audio.done` | 与 delta 同 identity | `ProtocolShapeTests` |
 | `response.output_audio_transcript.delta` / `.done` | 转写增量与终稿分列 | `ProtocolShapeTests` |
 | `response.function_call_arguments.done` | 工具名 + 完整参数字符串 | `ProtocolShapeTests` |
-| `response.done` | 三终态：`completed` 无 `status_details`、`incomplete` 带 `reason`、`failed` 带 `error` | `ProtocolShapeTests.ResponseDone_*` |
+| `response.done` | 四终态，`status_details` 一律发：`completed` 只带 `type`、`incomplete`/`cancelled` 另带 `reason`、`failed` 另带 `error.type`；`output` 里的消息项与 `output_item.done` 逐字段相同 | `ProtocolShapeTests.ResponseDone_*` / `Response_TerminalOutputItemMatchesOutputItemDone` |
 | `error` | 嵌套 `error.{type,code,message}`，非扁平 | `ProtocolShapeTests.Error_*` |
 | 上行 `input_audio_buffer.append` / `commit` / `clear` | 解析形状 | `RealtimeConnection.DispatchAsync` |
 | 上行 `session.update` / `response.create` / `response.cancel` | 解析形状 | 同上 |
 | 上行 `conversation.item.create` / `delete` / `truncate` | 解析形状 | 同上 |
 
-上表是**本实现自证**的形状断言；能否与上游真正对齐，由 `corpus/protocol/` 的 28 条差分语料回答。
+上表是**本实现自证**的形状断言；能否与上游真正对齐，由 `corpus/protocol/` 的 36 条差分语料回答。
 两者互补：单元测试挡住内部漂移，差分语料挡住与上游的偏离。
 
 渲染链那几条尤其只有靠这两层同时守住才安全：`output_item.added` 缺失时客户端不报错、
@@ -134,9 +209,12 @@
 | `local` 子命令 | 是（编译通过） | 进程内四段串联；**未端到端实跑**（缺模型文件） |
 | `talk` 子命令 | 是（编译通过） | WebSocket 客户端 + NAudio 设备 I/O。平台矩阵：Windows 走 WASAPI 播放 + WinMM 录制（已实跑，设备创建成功）；Linux 走 ALSA（仅编译期校验，未在真实设备上跑）；macOS 启动即报 `PlatformNotSupportedException` |
 | `tools/TextProbe` | 是（`/tools/` 目录） | 文本层探针，为 `corpus/text/` 输出 `unspeakable` / `markdown` / `sentences` 三视图 |
+| `tools/LanguageProbe` | 是（`/tools/` 目录） | 语言层探针，按片驱动 `AssistantLanguageProbe`，输出判出语言与每片后的窗口 |
+| `tools/ProtocolProbe` | 是（`/tools/` 目录） | 协议层探针，走产品序列化入口构造 26 类服务端事件 |
+| `tools/TurnsProbe` | 是（`/tools/` 目录） | 轮次层探针，按脚本驱动状态机并注入虚拟时钟 |
 | `tools/ApiProbe` | 是（`/tools/` 目录） | 反射导出依赖包与本实现的公开表面（`--self`） |
 
-`/tools/` 下两个探针都进了解决方案，因此「0 警告 0 错误」覆盖它们，不会悄悄腐烂。
+`/tools/` 下三个探针都进了解决方案，因此「0 警告 0 错误」覆盖它们，不会悄悄腐烂。
 
 诊断工具 `tools/ApiProbe` 同样在解决方案内，用反射导出五个程序集的公开表面，供「公开 API 审计」复核。
 
@@ -147,9 +225,9 @@
 | 未覆盖部分 | 原因 | 风险 | 计划 |
 |---|---|---|---|
 | 音频层差分语料为空 | 模型推理受浮点累加顺序影响，无法逐字节比对 | 中——只能靠采样率/段数/时长误差带间接验证 | 用固定音频跑一遍四段，比段落数、总时长与事件序列，不比样本值 |
-| 协议层差分语料为空 | 未接上游 `openai_realtime/realtime_contract.py` 的契约检查器 | 中——线路上行/下行顺序缺跨实现对照 | 复用上游契约检查器，在其上重放同一事件序列 |
+| 协议层只比单事件形状，不比顺序 | 语料是「一事件一例」，没有覆盖一整轮的上行/下行时序 | 中——事件顺序错乱（例如 delta 先于 item.added）测不出来 | 复用上游 `realtime_contract.py` 的契约检查器，重放同一事件序列 |
+| 轮次状态机的接合点未实测 | 状态机自身与上游逐值一致，但 `VadHandler` 何时调 `SpeechCandidateStarted` / `SegmentDiscarded` 没有真跑验证 | 中——接错时机仍会退化成「卡住」或「停顿即两轮」 | 真跑一轮带打断的对话，对照上游日志的轮次序列 |
 | `local` / `talk` 未实跑 | 缺 Silero/Whisper/Qwen3-TTS 模型文件与麦克风 | **高**——全链路首次真跑可能暴露队列时序问题 | 备齐模型后单机跑一轮，录下音频与事件时序 |
-| VAD 长程状态机 | C006 未移植 | 中——打断与续说场景行为不等价 | 明确定位为「本期不含」，不冒充已覆盖 |
 | 12 个后端无运行时 | D010 | 低——`BackendUnavailableException` 显式报错，不静默降级 | 按需逐步补齐 |
 | 跨平台音频 I/O | E001 —— Windows 与 Linux 后端已实现，macOS 缺（NAudio.MacOS 仅预发布） | 中 —— Linux ALSA 路径未在真实设备上验证；服务端 `serve` 不受影响 | Windows 已实跑设备创建；Linux 需在装 `libasound.so.2` 的机器上跑一轮；macOS 等 `NAudio.MacOS` 出正式版 |
 | 惰性加载的模型路径 | E003 运行期报错 | 低——首次合成才失败，非启动即失败 | 可加 `--check-models` 预检 |

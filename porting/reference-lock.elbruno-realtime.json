@@ -1,0 +1,12 @@
+{
+  "vcs": "git",
+  "commit": "8662db1da92b0f53fdc312093bfdb4054218cfcd",
+  "tree_hash": "7151763e5184aef2a75879f7a2287891828950c3",
+  "commit_count": 47,
+  "head_subject": "2026-08-02 15:00:19 -0400 feat: Add ElBruno.Realtime.BlazorComponents v0.11.0 (Closes #9)",
+  "dirty_files": 0,
+  "file_count": 322,
+  "repo": "C:\\workshop\\github\\ElBruno.Realtime",
+  "locked_at": "2026-10-27T10:47:15",
+  "note": "同域参考 v0.11.0：只取 C# 工程形态，不参与行为等价"
+}

@@ -30,6 +30,52 @@
 > 官方 README 明写 "still in pre-release phase and breaking code changes may be performed"，
 > 因此 macOS 未接入默认构建，见差异账 E-01。
 
+### 同域参考（设计参考，不参与行为等价，也不是运行时来源）
+
+| 项 | 值 |
+|---|---|
+| 仓库 | `C:\workshop\github\ElBruno.Realtime`（github.com/elbruno/ElBruno.Realtime，MIT） |
+| 锁定版本 | `8662db1da92b0f53fdc312093bfdb4054218cfcd`（v0.11.0，2026-08-02） |
+| 指纹文件 | `porting/reference-lock.elbruno-realtime.json`（322 文件，tree `7151763e…`；check 已通） |
+| NuGet | `ElBruno.Realtime 0.11.0` 及其生态包（QwenTTS / KokoroTTS / VibeVoice 适配器、Blazor 组件） |
+| 定位 | 与本工程**问题域同构**的 .NET 实时语音会话框架：Silero VAD → Whisper STT → MEAI `IChatClient` → 可插拔 TTS |
+
+参考点（仅取 C# 工程形态与工程实践，**不取行为语义**——行为基线只有上游一处）：
+
+- **MEAI 抽象形态**：`IVoiceActivityDetector` / `ITextToSpeechClient` / `IConversationSessionClient` 等接口切分方式，可对照本实现 `Core/Backends` 契约的粒度
+- **SileroVad 并发纪律**：`SileroVadDetector` 用 `SemaphoreSlim _inferenceLock` 串行化 ONNX 推理会话（0.10.0 修的多调用方并发缺陷）——与本工程「ManySpeech OnlineVad 每段一条流」的语义互为印证，接入多消费者时必查
+- **会话隔离**：`IConversationSessionStore`（0.10.0 防多用户历史泄漏）——对应本实现 `ChatSession` 按连接隔离的口径
+- **延迟观测**：`LatencyMonitor` 组件的指标切分——对照本实现 `TurnLatency` / `response.metadata` 的账目项
+- **DI 装配**：`DependencyInjection` 的 builder 扩展模式（`AddRealtimePipeline` 风格）——本实现保持手工装配，仅在需要对外开放嵌入能力时回头参考
+
+纪律：当本仓库的形态与上游行为冲突时，**上游为准**；该仓库只回答「C# 生态惯用形状是什么」。
+
+### WebRTC 同域参考（tryAGI.WebRTC）
+
+| 项 | 值 |
+|---|---|
+| 仓库 | `C:\workshop\github\WebRTC`（github.com/tryAGI/WebRTC，MIT） |
+| 锁定版本 | `e64acf345fc6b3d9703653d535aac77e72dcb335`（0.x 实验线，2026-10-27） |
+| 指纹文件 | `porting/reference-lock.tryagi-webrtc.json`（311 文件，tree `98a5b0bb…`；check 已通） |
+| NuGet | `tryAGI.WebRTC 0.2.10-dev.65`（仅预发布） |
+| 定位 | .NET 10 纯托管 WebRTC 传输（自研于 RFC：ICE/DTLS-SRTP/SCTP 全自研，媒体编解码留给应用层），Pion 互测通过，文档示例即 `oai-events` 场景 |
+
+**选型记录（2026-10-27，用户决策）**：D003 实现走 **SIPSorcery 稳定版**（NuGet 正式版，遵守「预发布包不进默认构建」纪律；Opus 编码走 SIPSorceryMedia.Encoders）。tryAGI.WebRTC 仅作**同域形态参照**：
+
+- `SendOpusAsync(payload, rtpTimestamp, marker)` / `ReceiveAudioAsync` 的**边界划分**（库管 RTP 帧化+SRTP，应用管编码/时钟/pacing）——对照 SIPSorcery `AudioSink`/`AudioSource` 的取舍
+- RFC 3550 静音抑制下的**时钟语义**（时钟原点保持、整帧抑制、下一帧截止期）——与上游 PipelineAudioTrack 的 pacing 相同问题域，两处参照互证
+- 数据频道生命周期（`DataChannelsReady` 与 `MediaReady` 分离、borrowed owner）——对照上游 datachannel open/close 事件处理
+
+### WebRTC 同域参考（SIPSorcery.OpenAI.Realtime）
+
+| 项 | 值 |
+|---|---|
+| 包 | `SIPSorcery.OpenAI.Realtime`（NuGet，10.0.18-pre，2026-10-24；github.com/sipsorcery-org/sipsorcery 仓库 examples 旁路） |
+| 许可 | BSD 3-Clause **+ BY-NC-SA 附加限制（非商业）**——**不可作依赖**，仅形态参照 |
+| 定位 | SIPSorcery 官方的 OpenAI Realtime WebRTC **客户端**（REST 签名 + `WebRTCEndPoint` + `DataChannelMessenger`） |
+
+参照点：SIPSorcery 10.x 的 PeerConnection 组装与 Opus 收发的**官方用法**；**Opus 编解码用 Concentus 2.2.2（纯托管）**——本实现沿用此选型替代 SIPSorceryMedia.Encoders（原生 libopus，容器需多平台原生资产）；`DataChannelMessenger` 的事件序列化分层。另注意它是 OpenAI **客户端**（浏览器 ← ASP.NET 桥 → OpenAI 的形态在 BrowserBridge 示例），本实现是对端**服务端**，方向相反。
+
 ## 同步策略
 
 - [x] 长期跟随上游，每次动工前核对漂移

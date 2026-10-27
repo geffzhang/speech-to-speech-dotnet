@@ -1,0 +1,12 @@
+{
+  "vcs": "git",
+  "commit": "e64acf345fc6b3d9703653d535aac77e72dcb335",
+  "tree_hash": "98a5b0bb8a58ff8c78c7766a737ac9e4afd37207",
+  "commit_count": 196,
+  "head_subject": "2026-10-27 04:10:29 +0400 Await final Pion video frame publication explicitly",
+  "dirty_files": 0,
+  "file_count": 311,
+  "repo": "C:\\workshop\\github\\WebRTC",
+  "locked_at": "2026-10-27T11:11:29",
+  "note": "WebRTC 同域参考（tryAGI.WebRTC）：SIPSorcery 选型下的形态参照"
+}
