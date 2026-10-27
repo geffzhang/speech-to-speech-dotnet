@@ -319,3 +319,28 @@ compose 的 `llm_base_url` 多余 `/v1` 后缀（会拼成 `/v1/v1/chat/completi
 上游 httpx 只认环境变量——挂代理的机器上连本机 LLM 都会被隧道化 502）与
 C028（连字符后端名拼出的 `chat-completions_base_url` 键匹配不到下划线参数，
 BaseUrl 静默落空回落 api.openai.com，错误在远离根因处爆发）。
+
+### 评估套件（2026-10-27，D030 收口）
+
+上游 `evals/big_bench_audio`（Big Bench Audio vibe check）全链移植为 `src/SpeechToSpeech.Evals`
++ `tools/EvalProbe`（run / compare / show / build-subset 四个子命令）。验收分四层：
+
+1. **CPython MT19937 复刻互证（最强证据）**：`PythonRandom` 逐位复刻 CPython `_randommodule`
+   （init_by_array 播种、getrandbits 低位拼字、_randbelow Fisher-Yates shuffle）。getrandbits
+   参照值由上游 venv CPython 3.13 生成；关键行为学证据是 `build_subset(40, seed=0)` 在与上游
+   conftest 同构的 1000 条离线池上，**与上游 Python 抽出的 40 题序列逐位一致**
+   （[216, 348, 720, 862, ...]）——同种子跑 main 与换后端 PR 的对比口径从此可跨实现共享。
+2. **纯逻辑表证**：scoring 的 marker/scan 两路提取、否定窗口、有效/无效识别与数字词表按上游
+   测试逐条参数化移植（含「correct/negative 是普通词不猜」的窄口径）；report 的聚合口径
+   （错误与不可解析都记在模型头上）与双报告对比（题集/修订/judge 不一致警告）锁定。
+3. **runner 捕获状态机**：fake WS 驱动 split_turn（两个不同 input item）、同 item 复开不算分裂、
+   非完成状态 → `response_<status>`、error 事件透传、response_timeout、握手（session.created →
+   session.update → session.updated）与 session_limit_reached 容量重试。
+4. **CLI 参数面**：redact（无 `=` 的敏感 flag 保留参数名、下一个值脱敏）、`--host/--port` 三种
+   写法推导 URL、`--` 分隔、裸 flag 默认 `run`。
+
+账本动作：D009 缩窄为「口型 + 说话人分离」（gap 维持）；新增 D030（评估套件，resolved）、
+C031（音频解码/重采样内核差异，accepted）、C032（HF 云工作流 push-to-hub/job/prepare_eval_space
+不移植，报告本地 JSON、上游报告文件可被 C# compare 直接读取，accepted）。
+差异账 **64 条（resolved 47 / accepted 15 / gap 2）**，gap 仅剩口型/分离（D009）与 macOS 音频（E001）。
+测试 **378/378**（+52），全解决方案 0 警告 0 错误。

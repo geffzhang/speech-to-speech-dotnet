@@ -39,6 +39,13 @@
 - session.created：WS 握手后发、WebRTC 由 datachannel onOpen 发（SendSessionCreatedAsync 幂等）。
 - 环回测试教训：offer 的 track 必须与 answer 侧 codec/clock 有交集（PCMU vs OPUS → AudioIncompatible）。
 
+## 评估套件（D030 resolved，2026-10-27）
+
+- `src/SpeechToSpeech.Evals`（BigBenchAudio）+ `tools/EvalProbe`（run/compare/show/build-subset）。数据面：metadata.jsonl 1000 条、MP3 音频，HF 端点尊重 `HF_ENDPOINT`（可指 hf-mirror）。
+- **PythonRandom**：CPython MT19937 逐位复刻（init_by_array/getrandbits/_randbelow/shuffle），同种子 build_subset 与上游 Python 选题逐位一致（互证过）。getrandbits 是同一流顺序消耗。
+- 陷阱：NAudio 3.x `ISampleProvider.Read(Span<float>)`；MatchCollection 非泛型枚举要 `foreach (Match m in ...)`；上游 redact 无 `=` 的敏感 flag 保留名、下一值脱敏；`--push-to-hub`/job.py/prepare_eval_space 不移植（C032，报告本地 JSON）。
+- 测试缝：`Dataset.MetadataOverride`（离线 metadata）、Runner `ConsumeAsync`/`FinishCapture` internal。
+
 ## 当前状态（2026-10-27）
 
-差异账 60 条：resolved 45 / accepted 12 / gap 3（D005 实时转写、D009 评估套件、E001 macOS——均架构性）。测试 278/278。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default`（含 aiortc 1.15）。
+差异账 64 条：resolved 47 / accepted 15 / gap 2（D009 口型/说话人分离、E001 macOS 音频——均架构性）。测试 378/378。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15）。
