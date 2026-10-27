@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>SpeechToSpeech.Tools.DiarizationProbe</RootNamespace>
+    <Description>说话人分离探针：用真实 pyannote 权重跑分割引擎与流式状态机，输出几何、逐窗活动/重叠帧数与确定性结论（模型不入库，路径由参数给）。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Audio.Diarization\SpeechToSpeech.Audio.Diarization.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.PyannoteDiarization\SpeechToSpeech.Backends.PyannoteDiarization.csproj" />
+  </ItemGroup>
+
+</Project>
