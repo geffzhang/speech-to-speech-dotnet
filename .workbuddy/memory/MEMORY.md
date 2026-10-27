@@ -14,6 +14,7 @@
 - 状态机改动：先核对**调用点**再核对断言；第二轮/打断缺陷先二分「后端吐没吐事件」。
 - 反证实验 `git checkout` 恢复源文件必须在**同一条命令**里 `cp` 回来，否则「新测试全挂」会骗过自己。
 - 新测试要在**旧实现上全挂**才算有牙；只跑「通过」证明不了。
+- **账本的自述也要核**：accepted 的理由常建立在「这不影响可观察行为」的假设上，而假设的依据（哪个字段真出线、语料到底覆盖没覆盖）本身可能是错的。C029 三条自述全不准——把内部量当时线上量、声称语料已归一化覆盖而那格根本没语料、把「缺字段」写成「前缀不同」。
 
 ## 依赖
 
@@ -23,7 +24,7 @@ NuGet 正式版，不挂本地工程引用。已用：ManySpeech.SileroVad 1.1.2
 ## 层级陷阱速查
 
 - **音频**：`AudioDevices.cs` 集中平台后端（Win=WASAPI+WinMM、Linux=ALSA、macOS=PortAudio）；WasapiRecorder 非 IWavIn；ClientWebSocket 禁并发 Send（入队+单消费者）；ManySpeech OnlineVad 每段一条流（C023）；脚本推流三要素=真实时长 20ms 帧+尾补 1.5s 静音+proxy=None。
-- **协议**：`ServerEvent.Serialize` 用 `WireJson`（自写 RelaxedJsonEncoder，不用 UnsafeRelaxedJsonEscaping，C012/C017）；探针必须调产品序列化入口；`ResolveVoice` 一处定义喂两处；`BuildResponse` 唯一产地；status_details 任何终态都发；FIFO 用 Queue。
+- **协议**：`ServerEvent.Serialize` 用 `WireJson`（自写 RelaxedJsonEncoder，不用 UnsafeRelaxedJsonEscaping，C012/C017）；探针必须调产品序列化入口；`ResolveVoice` 一处定义喂两处；`BuildResponse` 唯一产地；status_details 任何终态都发；FIFO 用 Queue。**会话 id `session_<32hex>` 三处同一值**（session.created/updated 的 session.id、WebRTC Location、DELETE 路径，C029）——id 由 `RealtimeConnection._sessionId` 一处生成，事件构造器注入时 DeepClone 不回写配置；客户端自造的 id 必须被覆盖。
 - **turns/时延**：语料三前提=自包含+时钟可注入(`Func<double>`)+纯量返回；浮点 6 位定长字符串绝不用容差；复开窗口三值取 max；时延账按 response_key；hold_s 区间并集；metadata 逐字符字符串；round 9 只用于 vad_decision_s/hold_s；日志走 stderr。
 - **HOLD 宽限**：算出来≠生效——输出侧逐片阻塞等、输入侧只等 ProcessingDeadline；陈旧收尾照发 done(Succeeded=false)；丢弃修订要 `DiscardPendingTurn`。
 - **测量点**：vad_decision_s 锚=最后有声窗；disabled 只写 status；接线不进语料。
@@ -73,4 +74,4 @@ session.created：WS 握手后发，WebRTC 由 datachannel onOpen 发（幂等�
 
 ## 当前状态（2026-10-27）
 
-差异账 73 条：resolved 56 / accepted 17 / **gap 0**。测试 479/479。Python 参照环境 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（aiortc 1.15、numpy、kaldi-native-fbank、onnxruntime）。
+差异账 73 条：resolved 57 / accepted 16 / **gap 0**。协议语料 43 条（事件覆盖 26/26）。测试 482/482。Python 参照环境 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（aiortc 1.15、numpy、kaldi-native-fbank、onnxruntime）。
