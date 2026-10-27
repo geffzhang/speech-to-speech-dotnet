@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <RootNamespace>SpeechToSpeech.Backends.OpenLipSync</RootNamespace>
-    <Description>OpenLipSync 口型提取（ONNX Runtime，TCN 流式模型）——D009 STV 引擎，移植自 BasisVR/Basis com.basis.openlipsync（MIT）。</Description>
+    <Description>OpenLipSync 口型提取（ONNX Runtime，TCN 流式模型）——D031 引擎，移植自 BasisVR/Basis com.basis.openlipsync（MIT）。</Description>
   </PropertyGroup>
 
   <ItemGroup>

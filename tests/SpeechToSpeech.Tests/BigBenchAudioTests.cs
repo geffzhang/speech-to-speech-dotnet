@@ -15,7 +15,7 @@ public class BigBenchAudioTests
     private static readonly string[] Seed0Shuffle10 = ["h", "i", "b", "f", "d", "e", "c", "a", "j", "g"];
     private static readonly int[] Seed42Shuffle20 = [19, 5, 14, 4, 9, 13, 15, 18, 6, 12, 17, 10, 1, 11, 2, 16, 7, 8, 0, 3];
 
-    // 参照值由上游 CPython 3.13 random.Random 生成（见 porting/03-acceptance.md D009）。
+    // 参照值由上游 CPython 3.13 random.Random 生成（见 porting/03-acceptance.md 的 D030 小节）。
     [Fact]
     public void PythonRandom_MatchesCpythonGetrandBitsAndShuffle()
     {

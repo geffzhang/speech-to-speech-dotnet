@@ -1,0 +1,12 @@
+{
+  "vcs": "git",
+  "commit": "cc60257539d61302e8eae841b236736666b91be1",
+  "tree_hash": "109004ad5cc7008c71e27c275c2f44e911eb11c3",
+  "commit_count": 435,
+  "head_subject": "2026-10-27 17:47:57 +0800 chore: ignore the local .workbuddy workspace",
+  "dirty_files": 0,
+  "file_count": 892,
+  "repo": "C:\\workshop\\github\\voxa",
+  "locked_at": "2026-10-27T18:04:54",
+  "note": "流式说话人分离参照（voxa feat/streaming-diarization）：流式状态机/掩码引擎/统一音频时钟/离循环分离级与转写归因的本体来源"
+}

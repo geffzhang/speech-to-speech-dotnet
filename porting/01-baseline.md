@@ -39,7 +39,7 @@
 | `tool_call/`（函数签名解析） | 74 | 工具调用解析在 C# 侧走 `AssistantToolCallPart` 直通，无独立解析层 | D009 |
 | 设备/延迟基准（`test_torch_num_threads` 等） | 约 30 | Python 运行时特有（GIL、torch 线程数） | C001 |
 | 口型（STV） | 约 200 | 已移植：引擎 D031（OpenLipSync）+ 管线级/事件/配置 D032 | — |
-| 说话人分离（diarization） | 约 40 | 未移植（无 C# speaker embedding 运行时） | D009 |
+| 说话人分离（diarization） | 约 40 | 已移植：分离状态机 + powerset 掩码引擎 + 时间线/归因（D009）；声纹后端只有接缝（D033） | — |
 
 ---
 

@@ -9,7 +9,7 @@ namespace SpeechToSpeech.Backends.OpenLipSync;
 /// 上游 <c>speech_to_speech.output_audio.visemes</c> 事件的载荷是
 /// <c>{viseme: int 0-21, start_s, end_s}</c> 区间列表，由 wav2vec2 音素路线产出；
 /// 本引擎是逐帧（100 Hz）概率流，转换为「argmax → 相邻同 id 合并成区间」。
-/// 引擎与口型集的差异登记在差异账 D009。
+/// 引擎与口型集的差异登记在差异账 C033。
 /// </summary>
 public static class VisemeTimeline
 {

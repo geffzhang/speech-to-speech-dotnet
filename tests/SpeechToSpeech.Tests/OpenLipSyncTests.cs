@@ -6,7 +6,7 @@ using SpeechToSpeech.Core.Pipeline;
 namespace SpeechToSpeech.Tests;
 
 /// <summary>
-/// OpenLipSync 口型引擎（D009 STV）的单测。移植自 BasisVR/Basis com.basis.openlipsync（MIT）。
+/// OpenLipSync 口型引擎（D031）的单测。移植自 BasisVR/Basis com.basis.openlipsync（MIT）。
 ///
 /// 参照值由参照环境（CPython 3.13 + NumPy）按 Basis config 的 mel 前端几何逐项直算：
 /// 同一确定性信号喂 C# 前端与 NumPy 参照（HTK mel、hann symmetric、10·log10(max(power,1e-10))），

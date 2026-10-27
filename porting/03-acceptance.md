@@ -412,3 +412,91 @@ D009 的口型部分收口：引擎（D031）之外，管线级、事件与配�
 账本动作：D009 缩窄为「流式说话人分离」（gap 维持，唯一剩余架构性缺口）；D013 从 25/26 更新为
 26/26；新增 D032（口型管线级，resolved）、C034（区间密度：上游音素稀疏 vs 本引擎整窗连续，accepted）。
 差异账 **68 条（resolved 50 / accepted 17 / gap 1）**，测试 **415/415**（+14），全解决方案 0 警告 0 错误。
+
+### 流式说话人分离（2026-10-27，D009 收口）
+
+参照实现是 voxa 的 `feat/streaming-diarization`（`cc60257`，锁定于
+`porting/reference-lock.voxa.json`，工作区干净）。本轮按本仓库的管线形态（`BaseHandler` 线程链 +
+`BlockingCollection` 队列）重装，而不是把对方的处理器搬过来。验收分五层：
+
+1. **掩码解码：不要过早压平。** pyannote segmentation-3.0 每帧输出 `num_classes` 个 logits
+   （3 说话人、最多 2 并发 ⇒ 1+3+3=7 类 powerset）。旧解码把它压成 speech/silence，丢掉三件事：
+   谁、重叠、置信度。现在 softmax 后按 powerset 映射边缘化到本地 speaker，
+   `p[s] = Σ_c softmax[c]·mapping[c][s]`。**边缘和故意 ≠ 1**：双人类别把一份概率同时给它那两个
+   成员，所以「一帧上两项非零」本身就是重叠的判据。单测钉死四条：silence 类全零、单人类只亮
+   一个、`(0,2)` 人类两个都 >0.99、一个单人类加一个双人类各占一半时和是 **1.5**（不是 1），
+   宽度不匹配抛 `ArgumentException`。
+2. **本地通道语义：身份不能按通道跨窗累积。** 模型的 speaker 通道只在窗口内有效——窗口 A 的
+   channel 0 与窗口 B 的 channel 0 不是同一个人。所以把「某本地通道的一段连续帧」当 *local turn*，
+   对它那一段音频**取一次声纹**，身份由声纹携带、而不是由通道号携带。单测
+   `An_embedding_is_taken_per_turn_not_per_window` 用计数器把这条钉死（否则窗口数一多，
+   embedding 调用次数就会露馅）。
+3. **增量音频状态：收尾要能回溯。** 定容环形缓冲按**绝对样本索引**寻址（`Oldest/End/Count`、
+   `CopyTo(absStart, dest)` 越界零填充、`DiscardBefore`），保留策略
+   `DiscardBefore(min(nextWindowStart, SamplesSeen − MaxBufferedSeconds·sr))`——`Flush` 时给
+   「还没定稿的那一轮」补声纹，必须能回溯到它的起点；窗口滑动又不能无限长。长流下缓冲区有界、
+   推流分块方式不改变结果（`Chunking_does_not_change_the_result` 逐条比对更新序列）。
+4. **会话级状态与修订协议。** speaker 原型是 L2 归一化质心 + 证据权重：`Weight` 受
+   `PrototypeWeightCap` 冻结（防止老说话人把质心钉死），`TotalEvidence` 不设上限（可合并性要靠
+   它判断）。id 按创建顺序、永不复用；合并只退让「较新且证据 < `MergeEvidence`」的一方。
+   证据不足（语音秒数 < `MinNewSpeakerEvidence` 或平均活动度 < `MinTurnConfidence`）时不新建：
+   在 `ContinuityWindow` 内借用前一位，否则 `UnknownSpeaker(-1)`；标签置信度分别是
+   新建 1.0 / 匹配 1−d / 借用减半 / Unknown 0。修订按 `Id` upsert、`Revision` 单调、`IsFinal`
+   只表示几何（end）已定；合会是另一条修订源，受 `RevisionWindow` 约束。时间线侧还有三条
+   硬约束：旧修订不回滚、新修订替换、跟踪条数有界。
+5. **不阻塞主循环 + 统一音频时钟。** `DiarizationHandler` 放在 VAD **之前**——它要的是连续音频，
+   不是 VAD 挑出来的段。音频重采样到 16 kHz 后 `TryWrite` 进有界 `Channel<Work>`，单 worker 消费；
+   **队列满算时间轴缺口**（`NotifyGap` 让绝对时间继续走），绝不背压音频线程。时钟统一到会话绝对秒：
+   `VadFrame.AudioStartMs/EndMs` → `VadAudio.AudioStart/EndSeconds` → `Transcription.Start/EndSeconds`，
+   再与分离段做区间 join。归因落在 `SttHandler`（转写与它的音频区间只在这一处同时在场，与上游
+   `base_stt_handler` 解析 `speaker_pending` 同位置）：区间重叠最多者胜、按 speaker 累加、
+   并列取更早起者、超出已提交时间线按 continuity 借用。线上事件保持原话，只给 LLM 历史加
+   `[speaker_N]` 前缀。
+
+**测试替身**：200 Hz / 400 Hz 双音（Goertzel 整数 bin 正交）同时伪造分割与声纹两个接缝，
+无模型、无网络，状态机全部行为在默认测试道里可复现。`StreamingDiarizerTests` 14 例（跨窗口稳定 id、
+重叠双段保留、短轮借用、无历史为 Unknown、说话人上限改为附着、同音频同更新、修订单调且
+final 最后、每轮一次 embedding、几何/采样率非法即拒），管线三组 18 例（转发不改字节且驱动时钟、
+会话结束冲尾可归因、**卡死 worker 变时间轴缺口而非背压**、24 kHz 输入重采样到 16 kHz 时钟、
+非音频项直通；时间线最大重叠/按人累加/并列更早/continuity 借用/合并重映射/旧修订不回滚/
+新修订替换/有界；powerset 解码五条）。
+
+**测试逼出来的一个真缺陷**：`DiarizationHandler` 原先把缺口上报写成
+`Interlocked.Exchange(ref _droppedSamples, 0)`，把累计指标一起清零——指标再也读不出真实历史。
+改成 `_pendingGap` 只承担「还没上报的缺口」，`_droppedSamples` 保持累计。
+
+**真实权重冒烟（`tools/DiarizationProbe`）**。替身跑得再绿也证明不了「真实 metadata 读得对、
+真实输出宽度对得上 num_classes」，所以补一个吃真模型的探针。权重取参照实现钉的 sherpa 导出
+（`model.onnx`，5,992,913 字节，SHA-256 `220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079`，
+与参照实现声明的值逐位一致），落 `models/pyannote-segmentation/`（不入库）。
+
+第一次跑就炸了，而且炸出两件事：
+
+1. **参照实现的几何假设在它自己的模型上不成立（C035）。** metadata 是 `window_size=160000` /
+   `receptive_field_shift=270`（592.6 帧），而参照实现要求窗口是帧步长的整数倍——真权重加载即被拒，
+   说明它的真模型路径从未跑通。本实现把**模型声明的窗口**向下取整到帧网格（592 帧 = 159840 样本 =
+   9.99 秒），默认跳长取 58 帧（15660）而不是 59，因为 own 区起点 `(window − hop)/2` 也要落在帧网格上，
+   窗口与跳长的帧数必须同奇偶；**显式给的**窗口/跳长仍然严格拒绝（配置错误不该被静默改写）。
+2. **`--diarization_window_ms` 是死的。** 窗口只写进配置、没喂给引擎，而 `Analyze` 只接受引擎自己声明的
+   长度——改窗口长度会让每一帧都抛参数异常。取整规则现在一处定义
+   （`DiarizationOptions.SnapToFrameGrid`），CLI 用它算出长度再建正式引擎。
+
+冒烟结论（同一份权重、同一段素材）：
+
+| 观测 | 结果 |
+|---|---|
+| 引擎几何 | 16 kHz、窗口 159840（9.99 s）、帧步长 270、帧偏移 495、本地说话人 3 |
+| 一窗帧数 | **589**（= ⌊(159840 − 991)/270⌋ + 1） |
+| 数字静音 | 0 活动帧、峰值 0.009 |
+| 真人语音（英语 + 西语交替 18.7 s，一窗内含两人） | 501/589 帧活跃、**2 个本地通道同时点亮**、峰值 0.9968 |
+| 同一窗两次推理 | 逐位相同 |
+| 流式状态机（真实几何、100 ms 块） | 62 次更新 / 18 次声纹调用 / 缓冲未越界；能量签名替身声纹把两人并成 1 个说话人——正好是 D033 那条缺口的现场 |
+| 缩短到 2.99 s 窗 | 174 帧、前瞻 4.51 s → 1.35 s，图接受动态长度 |
+
+诚实边界：这次冒烟验的是**工程事实**（metadata 键名、输出宽度、确定性、真实几何下状态机不崩），
+不是分离准确率——准确率是模型性质，而且没有真实声纹引擎时说话人身份本来就无从谈起（D033）。
+
+账本动作：D009 翻 resolved（缩窄为「声纹后端」并入 D033）；新增 D033（`ISpeakerEmbedding` 只有
+接缝、无模型实现——参照实现同样只有接缝，按参照边界接受）、C035（窗口几何，参照缺陷不复现）、
+`porting/reference-lock.voxa.json`。差异账 **70 条（resolved 52 / accepted 18 / gap 0）**——**首次 gap 归零**。
+测试 **449/449**（+34），全解决方案 0 警告 0 错误。

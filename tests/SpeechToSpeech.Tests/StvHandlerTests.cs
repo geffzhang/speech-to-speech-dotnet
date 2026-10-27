@@ -9,7 +9,7 @@ using SpeechToSpeech.Realtime.Protocol;
 namespace SpeechToSpeech.Tests;
 
 /// <summary>
-/// D009-2：口型级接线。
+/// D032：口型级接线。
 ///
 /// 这一级本身不做推理，它负责**什么时候算、算完怎么发**——上游把这三条写死在
 /// <c>Wav2Vec2STVHandler</c> 里，每条都对应一种只有接上客户端才看得见的错：
