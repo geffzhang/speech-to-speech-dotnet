@@ -83,8 +83,9 @@
 - **归因落点**：`SttHandler`（转写与其音频区间只在这一处同时在场）。区间最多者胜、并列取更早、超出已提交时间线按 continuity 借前一位、无线索宁可 Unknown。线上事件保持原话，只给 LLM 历史加 `[speaker_N]`。
 - **非阻塞**：`DiarizationHandler` 在 VAD 之前（要连续音频），有界 `Channel` + 单 worker，**队列满=时间轴缺口**（`NotifyGap`，`_pendingGap` 专职上报而 `_droppedSamples` 保持累计）。
 - **模型**：`models/pyannote-segmentation/model.onnx`（sherpa 导出 5,992,913 B，SHA-256 `220ad67c…`），不入库。冒烟 `tools/DiarizationProbe`（`--metadata` / `--pcm` 裸 f32 16k / `--window` 缩短窗）。真值：一窗 589 帧、静音 0 活跃、真人语音 501/589 活跃且 2 通道点亮、两次推理逐位相同、3s 窗前瞻 4.51→1.35s。
-- **剩余（D033）**：`ISpeakerEmbedding` 只有接缝，参照实现同样没有——接真人声纹只需实现 `Embed`（16k 单轮 → L2 向量）并在 CLI 赋值，状态机零改动。
+- **声纹（D033 resolved）**：`src/SpeechToSpeech.Backends.SpeakerEmbedding` = `KaldiFbank`（25ms/10ms、povey、**snip_edges=false 单边镜像**、512 FFT、80 mel 20~7600、log 前用 **`FLT_EPSILON`(1.1920929e-7) 不是 `float.Epsilon`**、global-mean）+ `OnnxSpeakerEmbedding`（3D-Speaker CAM++，metadata 全读、输出 L2 单位化、**不做内部重采样**）。模型 `models/speaker-embedding/model.onnx`（28,281,164 B，SHA-256 `aa3cfc16…`）。口径取自 sherpa-onnx —— 参照实现这一层是空的。
+- **三个真缺陷教训**：① scratch 复用 + `CopyTo` 按**目标长度**复制 → 短段声纹夹带后续音频（向量趋同→只剩 1 人）；② `Associate` 只在 `StartFrame==0` 查通道映射 → 同轮次被多窗口重复建段（段总时长 > 音频本身）；③ C036 凹陷判据 `0.7×onset` 在真实概率（换人处约 0.40）上永不成立 → 双人被缝成一段。修法：传本段长度 / 不论起点都先认亲 / 删 `Offset` 只按 `Onset`。
 
 ## 当前状态（2026-10-27）
 
-差异账 70 条：resolved 52 / accepted 18 / **gap 0（首次归零）**。测试 456/456。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy——mel/FFT 互证参照）。
+差异账 71 条：resolved 54 / accepted 17 / **gap 0**。测试 467/467。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy、**kaldi-native-fbank + onnxruntime**——fbank/embedding 对拍参照）。
