@@ -7,7 +7,7 @@
 
 ## 依赖与参考
 
-- **一律 NuGet 正式版**，不挂本地工程引用；预发布包不进默认构建。已用：ManySpeech.SileroVad 1.1.2 / WhisperAsr 1.0.1 / AliParaformerAsr 1.1.9 / TensorSharp.Chat 2026.10.11 / ElBruno.QwenTTS 1.10.2 / NAudio(+Alsa) 3.3.0 / NAudio.Core 3.3.0（OpenAiCompatible 直引，WDL sinc 重采样内核）/ SIPSorcery 10.0.17 / Concentus 2.2.2（Opus，工厂返回 IOpusEncoder/IOpusDecoder，Span 编码签名带 frame_size）。
+- **一律 NuGet 正式版**，不挂本地工程引用；预发布包不进默认构建。已用：ManySpeech.SileroVad 1.1.2 / WhisperAsr 1.0.1 / AliParaformerAsr 1.1.9 / TensorSharp.Chat 2026.10.11 / ElBruno.QwenTTS 1.10.2 / NAudio(+Alsa) 3.3.0 / NAudio.Core 3.3.0（OpenAiCompatible 直引，WDL sinc 重采样内核）/ PortAudioSharp2 1.0.6（macOS 音频，原生库由 org.k2fsa.portaudio.runtime.* 按 RID 提供）/ SIPSorcery 10.0.17 / Concentus 2.2.2（Opus，工厂返回 IOpusEncoder/IOpusDecoder，Span 编码签名带 frame_size）。
 - 同域参考（只取工程形态不取行为语义）：`C:\workshop\github\ElBruno.Realtime`（8662db1）、tryAGI.WebRTC（e64acf3）、`C:\workshop\github\Aurio`（重采样内核参考；其 NAudioWdlResampler 用 interp=true 实为线性插值，本实现取托管内核思路改用 sinc 模式）。SIPSorcery.OpenAI.Realtime 仅形态参照（BY-NC-SA 不可作依赖）。
 
 ## 核心纪律
@@ -18,7 +18,7 @@
 
 ## 层级陷阱速查（细节见各日 log 与账本）
 
-- **音频**：`AudioDevices.cs` 集中平台后端；WasapiRecorder 非 IWavIn；ClientWebSocket 禁并发 Send（入队+单消费者）；ManySpeech OnlineVad 每段一条流（C023），驱动 `IsFinished(isEndpoint:true)`+`GetResult(stream)`；脚本推流三要素=真实时长 20ms 帧+尾补 1.5s 静音+proxy=None。
+- **音频**：`AudioDevices.cs` 集中平台后端（Windows=WASAPI+WinMM、Linux=ALSA、macOS=PortAudio，E001 resolved）；WasapiRecorder 非 IWavIn；ClientWebSocket 禁并发 Send（入队+单消费者）；NAudio 3.x `IWaveProvider.Read`/`ISampleProvider.Read` 都是 Span 签名（三参重载不存在）；ManySpeech OnlineVad 每段一条流（C023），驱动 `IsFinished(isEndpoint:true)`+`GetResult(stream)`；脚本推流三要素=真实时长 20ms 帧+尾补 1.5s 静音+proxy=None。
 - **协议**：`ServerEvent.Serialize` 用 `WireJson`（自写 RelaxedJsonEncoder，不用 UnsafeRelaxedJsonEscaping——emoji/+/中文会偏，C012/C017）；探针必须调产品序列化入口；`ResolveVoice` 一处定义喂两处；BuildResponse 唯一产地；status_details 任何终态都发；HashSet 无序，FIFO 要 +Queue。
 - **turns/时延**：语料三前提=自包含+时钟可注入（`Func<double>`）+纯量返回；浮点 6 位定长字符串绝不用容差；复开窗口=三值取 max；时延账按 response_key；hold_s 区间并集；metadata 是逐字符字符串（Utf8JsonWriter 手写）；round 9 只用于 vad_decision_s/hold_s；先 build 再 pop；日志走 stderr。
 - **HOLD 宽限**：算出来≠生效——输出侧逐片阻塞等、输入侧只等 ProcessingDeadline；陈旧收尾照发 done(Succeeded=false)；丢弃修订要 DiscardPendingTurn。
@@ -46,6 +46,13 @@
 - 陷阱：NAudio 3.x `ISampleProvider.Read(Span<float>)`；MatchCollection 非泛型枚举要 `foreach (Match m in ...)`；上游 redact 无 `=` 的敏感 flag 保留名、下一值脱敏；`--push-to-hub`/job.py/prepare_eval_space 不移植（C032，报告本地 JSON）。
 - 测试缝：`Dataset.MetadataOverride`（离线 metadata）、Runner `ConsumeAsync`/`FinishCapture` internal。
 
+## macOS 音频（E001 resolved，2026-10-27）
+
+- `PortAudioAudioDevices`（Cli/Audio/PortAudioDevices.cs）：上游 sounddevice 底层就是 PortAudio——macOS 路径**同引擎对齐**；Windows/Linux 维持 NAudio 后端不动。
+- `PortAudioWaveIn`/`PortAudioWavePlayer` 实现 NAudio `IWaveIn`/`IWavePlayer`（含 `OutputWaveFormat`；`Volume` 是回调里 int16 就地缩放）；Pa_Initialize/Terminate 官方配对可重叠，逐设备配对即可；播放侧 framesPerBuffer=Unspecified 取最优块长，录制侧对齐上游 blocksize。
+- 上游 talk 的 sounddevice 形态：`RawInputStream/RawOutputStream`，int16/单声道/blocksize 定块。
+- 绑定冒烟 3 例（原生库解析/嵌套引用计数/枚举），macOS 真机未实跑（与 Linux ALSA 同口径）。
+
 ## 当前状态（2026-10-27）
 
-差异账 64 条：resolved 47 / accepted 15 / gap 2（D009 口型/说话人分离、E001 macOS 音频——均架构性）。测试 378/378。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15）。
+差异账 64 条：resolved 48 / accepted 15 / gap 1（仅剩 D009 口型/说话人分离——架构性）。测试 381/381。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15）。
