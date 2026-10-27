@@ -96,6 +96,45 @@ internal sealed class ToneMaskSegmentation : ISpeakerMaskSegmentation
 }
 
 /// <summary>
+/// 按脚本出概率的分割替身：每次 <see cref="Analyze"/> 由委托给出「哪些通道在哪些帧上满概率」。
+///
+/// <para>稳定的音调替身只能证明状态机在<b>理想</b>输入上自洽，而真实权重喂进来的东西有三样它造不出来：
+/// 同一段语音的起点在相邻窗口之间抖几帧、同一段语音换一条本地通道、以及一条长轨道中间另一条通道
+/// 零星亮两帧。这三样都会把「按起点帧 + 通道号认亲」的状态机打散成一堆互相咬住的段，
+/// 而用音调替身跑测试全是绿的——所以它们各自需要一个能造出那种形态的替身。</para>
+/// </summary>
+internal sealed class ScriptedMaskSegmentation(
+    int windowSamples,
+    Func<int, IReadOnlyList<(int Channel, int StartFrame, int EndFrame)>> script) : ISpeakerMaskSegmentation
+{
+    private int _call; // 第几个窗口。调度每窗调用一次，所以它就是窗口序号。
+
+    public int SampleRate => DiarizationTone.SampleRate;
+    public int WindowSamples { get; } = windowSamples;
+    public int FrameShiftSamples => DiarizationTone.FrameSamples;
+    public int FrameOffsetSamples => 0;
+    public int MaxLocalSpeakers => 2;
+
+    public SpeakerMaskWindow Analyze(ReadOnlySpan<float> window)
+    {
+        if (window.Length != WindowSamples)
+            throw new ArgumentException($"期望 {WindowSamples} 个样本；收到 {window.Length}。");
+
+        int frames = window.Length / FrameShiftSamples;
+        var rows = new float[frames][];
+        for (int f = 0; f < frames; f++) rows[f] = new float[MaxLocalSpeakers];
+
+        foreach (var (channel, start, end) in script(_call++))
+        {
+            for (int f = Math.Max(0, start); f < Math.Min(frames, end); f++)
+                rows[f][channel] = 1f;
+        }
+
+        return new SpeakerMaskWindow(rows);
+    }
+}
+
+/// <summary>
 /// 声纹模型的替身：这段音频的平均音色，只统计「一个声音占优」的帧
 /// （混合重叠的声纹两个人都描述不了，真模型也不会这么干）。
 /// </summary>

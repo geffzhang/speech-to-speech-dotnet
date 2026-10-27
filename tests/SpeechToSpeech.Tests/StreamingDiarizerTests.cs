@@ -365,6 +365,75 @@ public sealed class StreamingDiarizerTests
             string.Join(", ", seconds.Select(s => $"{s:F2}s")));
     }
 
+    // —— 下面三条是真实权重暴露出来的形态，音调替身造不出来 ——
+    //
+    // 稳定的音调过阈让每个轮次的起点逐位不变、通道号也从不换手，于是「按起点帧 + 通道号认亲」的实现
+    // 在测试里全绿。换成 pyannote 的真实输出就散架：18.7 秒的素材算出 29.1 秒的段，时间线上全是
+    // 互相咬住、谁也不延长谁的碎片。跨窗口唯一稳的判据是**时间重叠**——这三条把它钉住。
+
+    // 同一段语音的起点在相邻窗口之间抖几帧（模型在 0.5 附近的穿越点本来就不稳）。
+    // 抖动序列取 ±2 帧跨度 3 步：够让「起点帧相差不超过 1 帧」的认亲在一句话里断两次。
+    [Fact]
+    public void A_drifting_onset_stays_one_segment()
+    {
+        const int runStart = 30, runEnd = 150; // 0.30–1.50 秒
+        var audio = DiarizationTone.Build(1.8, (0.0, 1.8, 0.5, 0.0));
+        var mask = new ScriptedMaskSegmentation(WindowSamples, window =>
+        {
+            int windowStart = window * (HopSamples / DiarizationTone.FrameSamples);
+            int drift = window * 3 % 5 - 2;
+            return [(0, runStart + drift - windowStart, runEnd - windowStart)];
+        });
+
+        var table = Run(new StreamingDiarizer(mask, new ToneEmbedding(), Config()), audio);
+
+        var segment = Assert.Single(table.Final);
+        Assert.InRange(segment.Start, 0.20, 0.40);
+        Assert.InRange(segment.End, 1.48, 1.55);
+    }
+
+    // 本地通道编号只在窗口内有效：同一个人这一窗在通道 0、下一窗在通道 1（另一个人不在场时轨道被排到前面）。
+    // 真实权重的常态是这两件事一起发生——起点也抖、通道也换，所以这里一起造。
+    [Fact]
+    public void A_voice_that_switches_local_channel_stays_one_segment()
+    {
+        const int runStart = 30, runEnd = 150;
+        var audio = DiarizationTone.Build(1.8, (0.0, 1.8, 0.5, 0.0));
+        var mask = new ScriptedMaskSegmentation(WindowSamples, window =>
+        {
+            int windowStart = window * (HopSamples / DiarizationTone.FrameSamples);
+            int drift = window * 3 % 5 - 2;
+            return [(window % 2, runStart + drift - windowStart, runEnd - windowStart)];
+        });
+
+        var table = Run(new StreamingDiarizer(mask, new ToneEmbedding(), Config()), audio);
+
+        var segment = Assert.Single(table.Final);
+        Assert.InRange(segment.Start, 0.20, 0.40);
+        Assert.InRange(segment.End, 1.48, 1.55);
+    }
+
+    // 模型有时会在一段两秒的轨道中间给另一条通道亮两三帧：那不是第二个人，是噪声。
+    [Fact]
+    public void A_two_frame_blip_on_the_other_channel_is_not_a_speaker()
+    {
+        const int runStart = 30, runEnd = 150;
+        var audio = DiarizationTone.Build(1.8, (0.0, 1.8, 0.5, 0.0));
+        var mask = new ScriptedMaskSegmentation(WindowSamples, window =>
+        {
+            int windowStart = window * (HopSamples / DiarizationTone.FrameSamples);
+            var runs = new List<(int, int, int)> { (0, runStart - windowStart, runEnd - windowStart) };
+            if (window == 17) runs.Add((1, 80 - windowStart, 82 - windowStart)); // 长轨道中段的 20 ms 亮点
+            return runs;
+        });
+
+        var table = Run(new StreamingDiarizer(mask, new ToneEmbedding(), Config()), audio);
+
+        var segment = Assert.Single(table.Final);
+        Assert.Equal(0, segment.Speaker);
+        Assert.InRange(segment.End, 1.48, 1.55);
+    }
+
     private static string[] Describe(IReadOnlyList<SpeakerSegmentUpdate> segments) =>
         segments.Select(s => $"{s.Id}|{s.Speaker}|{s.Start:F3}|{s.End:F3}|{s.IsFinal}").ToArray();
 }
