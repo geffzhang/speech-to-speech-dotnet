@@ -1,0 +1,19 @@
+{
+  "note": "放不出去的段：撤候选并退回 SOFT_ENDED。正在听时也要退——否则下一句会被当成同一轮的续说",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "segment_finalized", "audio_ms": 1000, "output_hold_ms": 500},
+      {"op": "speech_candidate_started", "audio_ms": 1100},
+      {"op": "segment_discarded"},
+      {"op": "observe"},
+      {"op": "speech_candidate_started", "audio_ms": 1150},
+      {"op": "segment_discarded"},
+      {"op": "speech_started", "audio_ms": 1150},
+      {"op": "observe"},
+      {"op": "segment_discarded"},
+      {"op": "observe"}
+    ]
+  }
+}

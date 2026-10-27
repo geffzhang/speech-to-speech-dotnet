@@ -1,0 +1,17 @@
+{
+  "note": "处理期限只对当前轮的当前修订有效；提交或复开都会清掉它。带旧标签的查询拿到 null，不能读到别人的期限",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "processing_deadline", "turn_id": "turn_1", "revision": 0},
+      {"op": "segment_finalized", "audio_ms": 1000, "processing_delay_ms": 250},
+      {"op": "processing_deadline", "turn_id": "turn_1", "revision": 0},
+      {"op": "processing_deadline", "turn_id": null, "revision": 0},
+      {"op": "processing_deadline", "turn_id": "turn_1", "revision": 5},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0, "commit": true},
+      {"op": "processing_deadline", "turn_id": "turn_1", "revision": 0},
+      {"op": "observe"}
+    ]
+  }
+}

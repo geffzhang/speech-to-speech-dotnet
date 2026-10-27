@@ -1,0 +1,6 @@
+{
+  "case": "reopen-window",
+  "exit_code": 0,
+  "stdout": "{\"trace\": [{\"index\": 0, \"op\": \"speech_started\", \"result\": [\"turn_1\", 0, false]}, {\"index\": 1, \"op\": \"segment_finalized\", \"result\": null}, {\"index\": 2, \"op\": \"can_reopen\", \"result\": true}, {\"index\": 3, \"op\": \"can_reopen\", \"result\": true}, {\"index\": 4, \"op\": \"can_reopen\", \"result\": false}, {\"index\": 5, \"op\": \"speech_candidate_started\", \"result\": false}, {\"index\": 6, \"op\": \"speech_started\", \"result\": [\"turn_2\", 0, false]}, {\"index\": 7, \"op\": \"observe\", \"result\": {\"has_candidate\": false, \"phase\": \"listening\", \"turn\": [\"turn_2\", 0]}}]}\r\n",
+  "stderr": ""
+}

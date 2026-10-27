@@ -1,0 +1,15 @@
+{
+  "note": "重置把序号也归零：新会话的第一轮必须还叫 turn_1，否则两份日志的轮号无法对照",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0, "commit": true},
+      {"op": "reset"},
+      {"op": "observe"},
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "is_committed", "turn_id": "turn_1", "revision": 0},
+      {"op": "observe"}
+    ]
+  }
+}

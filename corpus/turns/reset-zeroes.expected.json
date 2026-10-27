@@ -1,0 +1,6 @@
+{
+  "case": "reset-zeroes",
+  "exit_code": 0,
+  "stdout": "{\"trace\": [{\"index\": 0, \"op\": \"speech_started\", \"result\": [\"turn_1\", 0, false]}, {\"index\": 1, \"op\": \"gate\", \"result\": {\"action\": \"accept\", \"deadline\": null}}, {\"index\": 2, \"op\": \"reset\", \"result\": null}, {\"index\": 3, \"op\": \"observe\", \"result\": {\"has_candidate\": false, \"phase\": null, \"turn\": [null, null]}}, {\"index\": 4, \"op\": \"speech_started\", \"result\": [\"turn_1\", 0, false]}, {\"index\": 5, \"op\": \"is_committed\", \"result\": false}, {\"index\": 6, \"op\": \"observe\", \"result\": {\"has_candidate\": false, \"phase\": \"listening\", \"turn\": [\"turn_1\", 0]}}]}\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,29 @@
+{
+  "ops": [
+    {
+      "op": "for_response",
+      "response_key": "resp_1",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "record_ttfa",
+      "response_key": "resp_1",
+      "seconds": 0.3
+    },
+    {
+      "op": "set_status",
+      "response_key": "resp_1",
+      "status": "cancelled"
+    },
+    {
+      "op": "log",
+      "response_key": "resp_1"
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_1",
+      "status": "cancelled"
+    }
+  ]
+}

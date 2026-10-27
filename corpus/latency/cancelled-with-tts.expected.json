@@ -1,0 +1,6 @@
+{
+  "case": "cancelled-with-tts",
+  "exit_code": 0,
+  "stdout": "{\"results\": [{\"turn_id\": \"turn_1\", \"turn_revision\": 0, \"source\": null}, null, null, {\"line\": \"Turn turn_1 rev=0 latency: stt=n/a llm=n/a tts_ttfa=0.30s e2e=n/a vad_decision=n/a hold=n/a smart_turn_status=n/a status=cancelled tts=cut\"}, {\"found\": true, \"json\": \"{\\\"e2e_s\\\":null,\\\"hold_s\\\":null,\\\"llm_s\\\":null,\\\"response_key\\\":\\\"resp_1\\\",\\\"smart_status\\\":null,\\\"source\\\":null,\\\"status\\\":\\\"cancelled\\\",\\\"stt_s\\\":null,\\\"tts_ttfa_s\\\":0.3,\\\"turn_id\\\":\\\"turn_1\\\",\\\"turn_revision\\\":0,\\\"vad_decision_s\\\":null,\\\"version\\\":2}\", \"length\": 221}]}",
+  "stderr": ""
+}

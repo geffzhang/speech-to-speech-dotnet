@@ -1,0 +1,17 @@
+{
+  "note": "候选挂起两秒后自动过期：输出放行，但候选本身还留着等 VAD 表态。两个期限分开算，才不会让「VAD 慢」变成「永久卡住」",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "segment_finalized", "audio_ms": 1000},
+      {"op": "speech_candidate_started", "audio_ms": 1200},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "advance", "seconds": 2.1},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "has_speech_candidate"},
+      {"op": "speech_started", "audio_ms": 3000},
+      {"op": "observe"}
+    ]
+  }
+}

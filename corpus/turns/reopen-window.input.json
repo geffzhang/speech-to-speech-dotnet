@@ -1,0 +1,16 @@
+{
+  "note": "复开窗口按流过的音频毫秒计，不是墙上时间；超限就必须开新轮。上限含等号（7000 可复开，7001 不可）",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "segment_finalized", "audio_ms": 1000},
+      {"op": "can_reopen", "audio_ms": 7500},
+      {"op": "can_reopen", "audio_ms": 8000},
+      {"op": "can_reopen", "audio_ms": 8001},
+      {"op": "speech_candidate_started", "audio_ms": 8001},
+      {"op": "speech_started", "audio_ms": 8001},
+      {"op": "observe"}
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "case": "two-responses-one-turn",
+  "exit_code": 0,
+  "stdout": "{\"results\": [null, {\"turn_id\": \"turn_1\", \"turn_revision\": 0, \"source\": null}, null, {\"turn_id\": \"turn_1\", \"turn_revision\": 0, \"source\": null}, null, {\"found\": true, \"json\": \"{\\\"e2e_s\\\":null,\\\"hold_s\\\":null,\\\"llm_s\\\":0.8,\\\"response_key\\\":\\\"resp_1\\\",\\\"smart_status\\\":null,\\\"source\\\":null,\\\"status\\\":\\\"completed\\\",\\\"stt_s\\\":0.25,\\\"tts_ttfa_s\\\":null,\\\"turn_id\\\":\\\"turn_1\\\",\\\"turn_revision\\\":0,\\\"vad_decision_s\\\":null,\\\"version\\\":2}\", \"length\": 221}, {\"found\": true, \"json\": \"{\\\"e2e_s\\\":null,\\\"hold_s\\\":null,\\\"llm_s\\\":0.35,\\\"response_key\\\":\\\"resp_2\\\",\\\"smart_status\\\":null,\\\"source\\\":null,\\\"status\\\":\\\"completed\\\",\\\"stt_s\\\":null,\\\"tts_ttfa_s\\\":null,\\\"turn_id\\\":\\\"turn_1\\\",\\\"turn_revision\\\":0,\\\"vad_decision_s\\\":null,\\\"version\\\":2}\", \"length\": 222}]}",
+  "stderr": ""
+}

@@ -1,0 +1,6 @@
+{
+  "case": "float-rendering",
+  "exit_code": 0,
+  "stdout": "{\"results\": [{\"turn_id\": \"turn_1\", \"turn_revision\": 0, \"source\": null}, null, null, {\"recorded\": true}, null, null, {\"found\": true, \"json\": \"{\\\"e2e_s\\\":12.345,\\\"hold_s\\\":null,\\\"llm_s\\\":2.0,\\\"response_key\\\":\\\"resp_1\\\",\\\"smart_status\\\":null,\\\"source\\\":null,\\\"status\\\":\\\"completed\\\",\\\"stt_s\\\":null,\\\"tts_ttfa_s\\\":1e-07,\\\"turn_id\\\":\\\"turn_1\\\",\\\"turn_revision\\\":0,\\\"vad_decision_s\\\":1.23456789,\\\"version\\\":2}\", \"length\": 230}, {\"line\": \"Turn turn_1 rev=0 latency: stt=n/a llm=2.00s tts_ttfa=0.00s e2e=12.35s vad_decision=1.23s hold=n/a smart_turn_status=n/a status=completed\"}]}",
+  "stderr": ""
+}

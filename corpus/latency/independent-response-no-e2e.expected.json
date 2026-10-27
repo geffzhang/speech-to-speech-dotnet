@@ -1,0 +1,6 @@
+{
+  "case": "independent-response-no-e2e",
+  "exit_code": 0,
+  "stdout": "{\"results\": [{\"turn_id\": null, \"turn_revision\": null, \"source\": null}, null, null, null, {\"found\": true, \"json\": \"{\\\"e2e_s\\\":null,\\\"hold_s\\\":null,\\\"llm_s\\\":0.55,\\\"response_key\\\":\\\"resp_1\\\",\\\"smart_status\\\":null,\\\"source\\\":\\\"client\\\",\\\"status\\\":\\\"completed\\\",\\\"stt_s\\\":null,\\\"tts_ttfa_s\\\":0.08,\\\"turn_id\\\":null,\\\"turn_revision\\\":0,\\\"vad_decision_s\\\":null,\\\"version\\\":2}\", \"length\": 222}, {\"line\": \"Turn n/a rev=0 latency: stt=n/a llm=0.55s tts_ttfa=0.08s e2e=n/a vad_decision=n/a hold=n/a smart_turn_status=n/a status=completed source=client\"}]}",
+  "stderr": ""
+}

@@ -1,0 +1,32 @@
+{
+  "ops": [
+    {
+      "op": "for_response",
+      "response_key": "resp_1"
+    },
+    {
+      "op": "bind_source",
+      "response_key": "resp_1",
+      "source": "client"
+    },
+    {
+      "op": "record_llm",
+      "response_key": "resp_1",
+      "seconds": 0.55
+    },
+    {
+      "op": "record_ttfa",
+      "response_key": "resp_1",
+      "seconds": 0.08
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_1",
+      "status": "completed"
+    },
+    {
+      "op": "log",
+      "response_key": "resp_1"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "case": "segment-discarded",
+  "exit_code": 0,
+  "stdout": "{\"trace\": [{\"index\": 0, \"op\": \"speech_started\", \"result\": [\"turn_1\", 0, false]}, {\"index\": 1, \"op\": \"segment_finalized\", \"result\": null}, {\"index\": 2, \"op\": \"speech_candidate_started\", \"result\": true}, {\"index\": 3, \"op\": \"segment_discarded\", \"result\": null}, {\"index\": 4, \"op\": \"observe\", \"result\": {\"has_candidate\": false, \"phase\": \"soft_ended\", \"turn\": [\"turn_1\", 0]}}, {\"index\": 5, \"op\": \"speech_candidate_started\", \"result\": true}, {\"index\": 6, \"op\": \"segment_discarded\", \"result\": null}, {\"index\": 7, \"op\": \"speech_started\", \"result\": [\"turn_1\", 1, true]}, {\"index\": 8, \"op\": \"observe\", \"result\": {\"has_candidate\": false, \"phase\": \"listening\", \"turn\": [\"turn_1\", 1]}}, {\"index\": 9, \"op\": \"segment_discarded\", \"result\": null}, {\"index\": 10, \"op\": \"observe\", \"result\": {\"has_candidate\": false, \"phase\": \"soft_ended\", \"turn\": [\"turn_1\", 1]}}]}\r\n",
+  "stderr": ""
+}

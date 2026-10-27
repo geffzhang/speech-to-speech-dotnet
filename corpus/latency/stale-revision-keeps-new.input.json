@@ -1,0 +1,42 @@
+{
+  "ops": [
+    {
+      "op": "stt",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "seconds": 0.9
+    },
+    {
+      "op": "stt",
+      "turn_id": "turn_1",
+      "turn_revision": 1,
+      "seconds": 0.3
+    },
+    {
+      "op": "discard_pending",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "pending",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "pending",
+      "turn_id": "turn_1",
+      "turn_revision": 1
+    },
+    {
+      "op": "for_response",
+      "response_key": "resp_1",
+      "turn_id": "turn_1",
+      "turn_revision": 1
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_1",
+      "status": "completed"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "case": "legacy-no-turn-label",
+  "exit_code": 0,
+  "stdout": "{\"trace\": [{\"index\": 0, \"op\": \"gate\", \"result\": {\"action\": \"accept\", \"deadline\": null}}, {\"index\": 1, \"op\": \"gate\", \"result\": {\"action\": \"accept\", \"deadline\": null}}, {\"index\": 2, \"op\": \"gate\", \"result\": {\"action\": \"accept\", \"deadline\": null}}, {\"index\": 3, \"op\": \"is_latest\", \"result\": true}, {\"index\": 4, \"op\": \"is_committed\", \"result\": false}, {\"index\": 5, \"op\": \"close\", \"result\": null}, {\"index\": 6, \"op\": \"begin_reopen_candidate\", \"result\": null}, {\"index\": 7, \"op\": \"confirm_reopen_candidate\", \"result\": false}, {\"index\": 8, \"op\": \"cancel_reopen_candidate\", \"result\": null}, {\"index\": 9, \"op\": \"start_reopen_grace\", \"result\": null}, {\"index\": 10, \"op\": \"observe\", \"result\": {\"has_candidate\": false, \"phase\": null, \"turn\": [null, null]}}]}\r\n",
+  "stderr": ""
+}

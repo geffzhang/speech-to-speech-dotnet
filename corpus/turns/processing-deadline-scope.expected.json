@@ -1,0 +1,6 @@
+{
+  "case": "processing-deadline-scope",
+  "exit_code": 0,
+  "stdout": "{\"trace\": [{\"index\": 0, \"op\": \"speech_started\", \"result\": [\"turn_1\", 0, false]}, {\"index\": 1, \"op\": \"processing_deadline\", \"result\": null}, {\"index\": 2, \"op\": \"segment_finalized\", \"result\": null}, {\"index\": 3, \"op\": \"processing_deadline\", \"result\": \"1000.250000\"}, {\"index\": 4, \"op\": \"processing_deadline\", \"result\": null}, {\"index\": 5, \"op\": \"processing_deadline\", \"result\": null}, {\"index\": 6, \"op\": \"gate\", \"result\": {\"action\": \"accept\", \"deadline\": null}}, {\"index\": 7, \"op\": \"processing_deadline\", \"result\": null}, {\"index\": 8, \"op\": \"observe\", \"result\": {\"has_candidate\": false, \"phase\": \"answering\", \"turn\": [\"turn_1\", 0]}}]}\r\n",
+  "stderr": ""
+}

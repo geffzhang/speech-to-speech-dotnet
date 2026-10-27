@@ -1,0 +1,31 @@
+{
+  "ops": [
+    {
+      "op": "stt",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "seconds": 0.5
+    },
+    {
+      "op": "discard_pending",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "pending",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "for_response",
+      "response_key": "resp_1",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_1",
+      "status": "completed"
+    }
+  ]
+}

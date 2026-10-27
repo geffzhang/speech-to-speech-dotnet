@@ -1,0 +1,20 @@
+{
+  "note": "候选确认按三元组严格匹配（轮 / 基准修订 / 候选修订）：时间或对象对不上就返回 false，绝不能含糊地认下来",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "segment_finalized", "audio_ms": 1000},
+      {"op": "begin_reopen_candidate", "turn_id": "turn_1", "revision": 0},
+      {"op": "begin_reopen_candidate", "turn_id": "turn_1", "revision": 0},
+      {"op": "begin_reopen_candidate", "turn_id": "turn_9", "revision": 0},
+      {"op": "confirm_reopen_candidate", "turn_id": "turn_1", "base_revision": 0, "candidate_revision": 2},
+      {"op": "confirm_reopen_candidate", "turn_id": "turn_9", "base_revision": 0, "candidate_revision": 1},
+      {"op": "confirm_reopen_candidate", "turn_id": "turn_1", "base_revision": 0, "candidate_revision": 1},
+      {"op": "observe"},
+      {"op": "has_speech_candidate"},
+      {"op": "cancel_reopen_candidate", "turn_id": "turn_1", "candidate_revision": 1},
+      {"op": "has_speech_candidate"}
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "note": "无轮次标签的工作（旧客户端、内部触发）一律放行，且不参与提交记账——给缺失标签「补一个当前轮」会让历史被凭空写入",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "gate", "turn_id": null, "revision": null, "commit": true},
+      {"op": "gate", "turn_id": null, "revision": 0},
+      {"op": "gate", "turn_id": "turn_1", "revision": null},
+      {"op": "is_latest", "turn_id": null, "revision": null},
+      {"op": "is_committed", "turn_id": null},
+      {"op": "close", "turn_id": null, "revision": null},
+      {"op": "begin_reopen_candidate", "turn_id": null, "revision": 0},
+      {"op": "confirm_reopen_candidate", "turn_id": null, "base_revision": 0, "candidate_revision": 1},
+      {"op": "cancel_reopen_candidate", "turn_id": null},
+      {"op": "start_reopen_grace", "turn_id": null, "revision": 0, "grace_seconds": 1.0},
+      {"op": "observe"}
+    ]
+  }
+}

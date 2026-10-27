@@ -1,0 +1,19 @@
+{
+  "note": "上限可配，配成 0 表示只有同一音频位置才能复开（差 1 毫秒就不行）；负值按 0 处理",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "configure_reopen", "unanswered_reopen_ms": 0},
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "segment_finalized", "audio_ms": 1000},
+      {"op": "can_reopen", "audio_ms": 1000},
+      {"op": "can_reopen", "audio_ms": 1001},
+      {"op": "speech_candidate_started", "audio_ms": 1001},
+      {"op": "speech_started", "audio_ms": 1001},
+      {"op": "configure_reopen", "unanswered_reopen_ms": -50},
+      {"op": "segment_finalized", "audio_ms": 1500},
+      {"op": "can_reopen", "audio_ms": 1500},
+      {"op": "observe"}
+    ]
+  }
+}

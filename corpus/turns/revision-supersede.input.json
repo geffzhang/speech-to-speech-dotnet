@@ -1,0 +1,24 @@
+{
+  "note": "复开是同一轮 revision+1（序号不动），旧修订随即失效：带旧标签的工作要 DROP，不能拿它去写历史",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "speech_started", "audio_ms": 100},
+      {"op": "segment_finalized", "audio_ms": 1000},
+      {"op": "advance", "seconds": 1.0},
+      {"op": "speech_started", "audio_ms": 2000},
+      {"op": "observe"},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "gate", "turn_id": "turn_1", "revision": 1},
+      {"op": "speech_started", "audio_ms": 2500},
+      {"op": "segment_finalized", "audio_ms": 3000},
+      {"op": "configure_reopen", "unanswered_reopen_ms": 100},
+      {"op": "can_reopen", "audio_ms": 3200},
+      {"op": "speech_started", "audio_ms": 3200},
+      {"op": "gate", "turn_id": "turn_1", "revision": 1},
+      {"op": "is_latest", "turn_id": "turn_1", "revision": 1},
+      {"op": "observe"}
+    ]
+  }
+}

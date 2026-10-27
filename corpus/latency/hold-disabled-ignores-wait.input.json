@@ -1,0 +1,28 @@
+{
+  "ops": [
+    {
+      "op": "smart",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "status": "disabled"
+    },
+    {
+      "op": "for_response",
+      "response_key": "resp_1",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "smart_wait",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "started_s": 10.0,
+      "ended_s": 10.5
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_1",
+      "status": "completed"
+    }
+  ]
+}

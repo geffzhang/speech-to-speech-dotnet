@@ -1,0 +1,6 @@
+{
+  "case": "log-requires-identity",
+  "exit_code": 0,
+  "stdout": "{\"results\": [{\"turn_id\": null, \"turn_revision\": null, \"source\": null}, null, {\"line\": null}, {\"found\": true, \"json\": \"{\\\"e2e_s\\\":null,\\\"hold_s\\\":null,\\\"llm_s\\\":0.7,\\\"response_key\\\":\\\"resp_1\\\",\\\"smart_status\\\":null,\\\"source\\\":null,\\\"status\\\":\\\"completed\\\",\\\"stt_s\\\":null,\\\"tts_ttfa_s\\\":null,\\\"turn_id\\\":null,\\\"turn_revision\\\":0,\\\"vad_decision_s\\\":null,\\\"version\\\":2}\", \"length\": 217}]}",
+  "stderr": ""
+}

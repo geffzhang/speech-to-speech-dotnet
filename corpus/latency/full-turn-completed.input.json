@@ -1,0 +1,73 @@
+{
+  "ops": [
+    {
+      "op": "stt",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "seconds": 0.18
+    },
+    {
+      "op": "vad_settle",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "seconds": 0.61
+    },
+    {
+      "op": "smart",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "status": "complete",
+      "grace_s": 0.8,
+      "delay_s": 0.0,
+      "analysis_s": 0.037
+    },
+    {
+      "op": "smart_wait",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "started_s": 100.0,
+      "ended_s": 100.24
+    },
+    {
+      "op": "for_response",
+      "response_key": "resp_1",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "session_id": "s1"
+    },
+    {
+      "op": "bind_source",
+      "response_key": "resp_1",
+      "source": "speech"
+    },
+    {
+      "op": "record_llm",
+      "response_key": "resp_1",
+      "seconds": 1.24
+    },
+    {
+      "op": "record_ttfa",
+      "response_key": "resp_1",
+      "seconds": 0.12
+    },
+    {
+      "op": "record_e2e",
+      "response_key": "resp_1",
+      "seconds": 2.01
+    },
+    {
+      "op": "set_vad_decision",
+      "response_key": "resp_1",
+      "seconds": 0.36
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_1",
+      "status": "completed"
+    },
+    {
+      "op": "log",
+      "response_key": "resp_1"
+    }
+  ]
+}

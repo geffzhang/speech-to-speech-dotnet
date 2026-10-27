@@ -1,0 +1,16 @@
+{
+  "note": "挂起不等于丢弃：VAD 复查期间只是压住，候选被取消后必须原样放行。合并这两者会让误判一次就永久丢一段回复",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "segment_finalized", "audio_ms": 1000},
+      {"op": "speech_candidate_started", "audio_ms": 1200},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "speech_candidate_cancelled"},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0, "commit": true},
+      {"op": "observe"}
+    ]
+  }
+}

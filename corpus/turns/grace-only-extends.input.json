@@ -1,0 +1,18 @@
+{
+  "note": "复开宽限只延长不缩短：后来一个更短的 grace 不能把已经等着的输出提前放出去",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "segment_finalized", "audio_ms": 1000, "output_hold_ms": 800},
+      {"op": "start_reopen_grace", "turn_id": "turn_1", "revision": 0, "grace_seconds": 0.3},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "start_reopen_grace", "turn_id": "turn_1", "revision": 0, "grace_seconds": 2.0},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "advance", "seconds": 1.0},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "advance", "seconds": 1.1},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0}
+    ]
+  }
+}

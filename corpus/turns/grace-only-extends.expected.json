@@ -1,0 +1,6 @@
+{
+  "case": "grace-only-extends",
+  "exit_code": 0,
+  "stdout": "{\"trace\": [{\"index\": 0, \"op\": \"speech_started\", \"result\": [\"turn_1\", 0, false]}, {\"index\": 1, \"op\": \"segment_finalized\", \"result\": null}, {\"index\": 2, \"op\": \"start_reopen_grace\", \"result\": null}, {\"index\": 3, \"op\": \"gate\", \"result\": {\"action\": \"hold\", \"deadline\": \"1000.800000\"}}, {\"index\": 4, \"op\": \"start_reopen_grace\", \"result\": null}, {\"index\": 5, \"op\": \"gate\", \"result\": {\"action\": \"hold\", \"deadline\": \"1002.000000\"}}, {\"index\": 6, \"op\": \"advance\", \"result\": null}, {\"index\": 7, \"op\": \"gate\", \"result\": {\"action\": \"hold\", \"deadline\": \"1002.000000\"}}, {\"index\": 8, \"op\": \"advance\", \"result\": null}, {\"index\": 9, \"op\": \"gate\", \"result\": {\"action\": \"accept\", \"deadline\": null}}]}\r\n",
+  "stderr": ""
+}

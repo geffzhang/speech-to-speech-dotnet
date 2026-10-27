@@ -1,0 +1,24 @@
+{
+  "ops": [
+    {
+      "op": "stt",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "seconds": 0.2
+    },
+    {
+      "op": "pending",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "clear_session",
+      "session_id": "never-registered"
+    },
+    {
+      "op": "pending",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    }
+  ]
+}

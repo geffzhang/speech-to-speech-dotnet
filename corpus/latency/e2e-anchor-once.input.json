@@ -1,0 +1,33 @@
+{
+  "ops": [
+    {
+      "op": "for_response",
+      "response_key": "resp_1",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "anchor_request",
+      "response_key": "resp_1"
+    },
+    {
+      "op": "record_e2e",
+      "response_key": "resp_1",
+      "seconds": 1.5
+    },
+    {
+      "op": "record_e2e",
+      "response_key": "resp_1",
+      "seconds": 9.9
+    },
+    {
+      "op": "anchor_available",
+      "response_key": "resp_1"
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_1",
+      "status": "completed"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "note": "响应收口后仍是当前轮且仍算已应答（工具回填与客户端主动响应依然有效），但不能再复开；要到下一轮才变陈旧",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0, "commit": true},
+      {"op": "observe"},
+      {"op": "close", "turn_id": "turn_1", "revision": 0},
+      {"op": "observe"},
+      {"op": "is_current_turn", "turn_id": "turn_1"},
+      {"op": "is_committed", "turn_id": "turn_1"},
+      {"op": "can_reopen", "audio_ms": 1200},
+      {"op": "begin_reopen_candidate", "turn_id": "turn_1", "revision": 0},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "speech_started", "audio_ms": 1200},
+      {"op": "is_committed", "turn_id": "turn_1", "revision": 0},
+      {"op": "observe"}
+    ]
+  }
+}

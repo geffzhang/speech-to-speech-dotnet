@@ -1,0 +1,19 @@
+{
+  "note": "已提交的轮次永不再挂起。已放行的输出再压住，回复就卡在半截、音频流永不关闭——这是最贵的一类回归",
+  "payload": {
+    "clock_start": 1000.0,
+    "steps": [
+      {"op": "speech_started", "audio_ms": 0},
+      {"op": "segment_finalized", "audio_ms": 1000, "output_hold_ms": 1000},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "advance", "seconds": 1.0},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0, "commit": true},
+      {"op": "observe"},
+      {"op": "segment_finalized", "audio_ms": 2000},
+      {"op": "start_reopen_grace", "turn_id": "turn_1", "revision": 0, "grace_seconds": 5.0},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0},
+      {"op": "gate", "turn_id": "turn_1", "revision": 0, "hold_for_grace": true},
+      {"op": "observe"}
+    ]
+  }
+}

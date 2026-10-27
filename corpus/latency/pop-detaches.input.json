@@ -1,0 +1,36 @@
+{
+  "ops": [
+    {
+      "op": "for_response",
+      "response_key": "resp_1",
+      "turn_id": "turn_1",
+      "turn_revision": 0,
+      "session_id": "s1"
+    },
+    {
+      "op": "pop",
+      "response_key": "resp_1",
+      "session_id": "s1"
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_1",
+      "status": "completed"
+    },
+    {
+      "op": "for_response",
+      "response_key": "resp_2",
+      "turn_id": "turn_2",
+      "turn_revision": 0
+    },
+    {
+      "op": "discard_response",
+      "response_key": "resp_2"
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_2",
+      "status": "completed"
+    }
+  ]
+}

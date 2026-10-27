@@ -1,0 +1,6 @@
+{
+  "case": "hold-disabled-ignores-wait",
+  "exit_code": 0,
+  "stdout": "{\"results\": [null, {\"turn_id\": \"turn_1\", \"turn_revision\": 0, \"source\": null}, null, {\"found\": true, \"json\": \"{\\\"e2e_s\\\":null,\\\"hold_s\\\":null,\\\"llm_s\\\":null,\\\"response_key\\\":\\\"resp_1\\\",\\\"smart_status\\\":\\\"disabled\\\",\\\"source\\\":null,\\\"status\\\":\\\"completed\\\",\\\"stt_s\\\":null,\\\"tts_ttfa_s\\\":null,\\\"turn_id\\\":\\\"turn_1\\\",\\\"turn_revision\\\":0,\\\"vad_decision_s\\\":null,\\\"version\\\":2}\", \"length\": 228}]}",
+  "stderr": ""
+}

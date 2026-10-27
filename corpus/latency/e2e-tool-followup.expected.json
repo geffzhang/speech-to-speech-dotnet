@@ -1,0 +1,6 @@
+{
+  "case": "e2e-tool-followup",
+  "exit_code": 0,
+  "stdout": "{\"results\": [{\"turn_id\": \"turn_1\", \"turn_revision\": 0, \"source\": null}, null, {\"recorded\": true}, {\"turn_id\": \"turn_1\", \"turn_revision\": 0, \"source\": null}, null, null, null, {\"recorded\": false}, {\"found\": true, \"json\": \"{\\\"e2e_s\\\":0.9,\\\"hold_s\\\":null,\\\"llm_s\\\":null,\\\"response_key\\\":\\\"resp_1\\\",\\\"smart_status\\\":null,\\\"source\\\":null,\\\"status\\\":\\\"completed\\\",\\\"stt_s\\\":null,\\\"tts_ttfa_s\\\":null,\\\"turn_id\\\":\\\"turn_1\\\",\\\"turn_revision\\\":0,\\\"vad_decision_s\\\":null,\\\"version\\\":2}\", \"length\": 221}, {\"found\": true, \"json\": \"{\\\"e2e_s\\\":null,\\\"hold_s\\\":null,\\\"llm_s\\\":0.4,\\\"response_key\\\":\\\"resp_2\\\",\\\"smart_status\\\":null,\\\"source\\\":\\\"tool\\\",\\\"status\\\":\\\"completed\\\",\\\"stt_s\\\":null,\\\"tts_ttfa_s\\\":null,\\\"turn_id\\\":\\\"turn_1\\\",\\\"turn_revision\\\":0,\\\"vad_decision_s\\\":null,\\\"version\\\":2}\", \"length\": 223}]}",
+  "stderr": ""
+}

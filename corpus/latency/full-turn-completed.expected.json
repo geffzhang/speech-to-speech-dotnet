@@ -1,0 +1,6 @@
+{
+  "case": "full-turn-completed",
+  "exit_code": 0,
+  "stdout": "{\"results\": [null, null, null, null, {\"turn_id\": \"turn_1\", \"turn_revision\": 0, \"source\": null}, null, null, null, {\"recorded\": true}, null, {\"found\": true, \"json\": \"{\\\"e2e_s\\\":2.01,\\\"hold_s\\\":0.24,\\\"llm_s\\\":1.24,\\\"response_key\\\":\\\"resp_1\\\",\\\"smart_status\\\":\\\"complete\\\",\\\"source\\\":\\\"speech\\\",\\\"status\\\":\\\"completed\\\",\\\"stt_s\\\":0.18,\\\"tts_ttfa_s\\\":0.12,\\\"turn_id\\\":\\\"turn_1\\\",\\\"turn_revision\\\":0,\\\"vad_decision_s\\\":0.36,\\\"version\\\":2}\", \"length\": 232}, {\"line\": \"Turn turn_1 rev=0 latency: stt=0.18s llm=1.24s tts_ttfa=0.12s e2e=2.01s vad_settle=0.61s vad_decision=0.36s hold=0.24s smart_turn_status=complete status=completed source=speech\"}]}",
+  "stderr": ""
+}

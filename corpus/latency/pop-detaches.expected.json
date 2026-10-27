@@ -1,0 +1,6 @@
+{
+  "case": "pop-detaches",
+  "exit_code": 0,
+  "stdout": "{\"results\": [{\"turn_id\": \"turn_1\", \"turn_revision\": 0, \"source\": null}, {\"found\": true}, {\"found\": false}, {\"turn_id\": \"turn_2\", \"turn_revision\": 0, \"source\": null}, null, {\"found\": false}]}",
+  "stderr": ""
+}

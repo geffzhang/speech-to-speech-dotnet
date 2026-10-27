@@ -1,0 +1,55 @@
+{
+  "ops": [
+    {
+      "op": "for_response",
+      "response_key": "resp_1",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "anchor_request",
+      "response_key": "resp_1"
+    },
+    {
+      "op": "record_e2e",
+      "response_key": "resp_1",
+      "seconds": 0.9
+    },
+    {
+      "op": "for_response",
+      "response_key": "resp_2",
+      "turn_id": "turn_1",
+      "turn_revision": 0
+    },
+    {
+      "op": "bind_source",
+      "response_key": "resp_2",
+      "source": "tool"
+    },
+    {
+      "op": "anchor_attach_existing",
+      "response_key": "resp_2",
+      "from_response_key": "resp_1"
+    },
+    {
+      "op": "record_llm",
+      "response_key": "resp_2",
+      "seconds": 0.4
+    },
+    {
+      "op": "record_e2e",
+      "response_key": "resp_2",
+      "seconds": 5.0
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_1",
+      "status": "completed"
+    },
+    {
+      "op": "payload",
+      "response_key": "resp_2",
+      "status": "completed"
+    }
+  ]
+}

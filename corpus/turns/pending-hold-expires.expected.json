@@ -1,0 +1,6 @@
+{
+  "case": "pending-hold-expires",
+  "exit_code": 0,
+  "stdout": "{\"trace\": [{\"index\": 0, \"op\": \"speech_started\", \"result\": [\"turn_1\", 0, false]}, {\"index\": 1, \"op\": \"segment_finalized\", \"result\": null}, {\"index\": 2, \"op\": \"speech_candidate_started\", \"result\": true}, {\"index\": 3, \"op\": \"gate\", \"result\": {\"action\": \"hold\", \"deadline\": \"1002.000000\"}}, {\"index\": 4, \"op\": \"advance\", \"result\": null}, {\"index\": 5, \"op\": \"gate\", \"result\": {\"action\": \"accept\", \"deadline\": null}}, {\"index\": 6, \"op\": \"has_speech_candidate\", \"result\": true}, {\"index\": 7, \"op\": \"speech_started\", \"result\": [\"turn_1\", 1, true]}, {\"index\": 8, \"op\": \"observe\", \"result\": {\"has_candidate\": false, \"phase\": \"listening\", \"turn\": [\"turn_1\", 1]}}]}\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,6 @@
+{
+  "case": "clear-unknown-session-drops-pending",
+  "exit_code": 0,
+  "stdout": "{\"results\": [null, {\"found\": true}, null, {\"found\": false}]}",
+  "stderr": ""
+}
