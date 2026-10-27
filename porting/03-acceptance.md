@@ -461,9 +461,18 @@ final 最后、每轮一次 embedding、几何/采样率非法即拒），管线
 非音频项直通；时间线最大重叠/按人累加/并列更早/continuity 借用/合并重映射/旧修订不回滚/
 新修订替换/有界；powerset 解码五条）。
 
-**测试逼出来的一个真缺陷**：`DiarizationHandler` 原先把缺口上报写成
-`Interlocked.Exchange(ref _droppedSamples, 0)`，把累计指标一起清零——指标再也读不出真实历史。
-改成 `_pendingGap` 只承担「还没上报的缺口」，`_droppedSamples` 保持累计。
+**测试逼出来的两个真缺陷**：
+
+1. `DiarizationHandler` 原先把缺口上报写成 `Interlocked.Exchange(ref _droppedSamples, 0)`，把累计指标
+   一起清零——指标再也读不出真实历史。改成 `_pendingGap` 只承担「还没上报的缺口」，
+   `_droppedSamples` 保持累计。
+2. **「会话结束」与「开新会话」被混成了一件事，而且是间歇性失败才暴露的**：`OnSessionEnd`
+   先冲尾（目的正是让 STT 队列里剩下的音频还能用上尾部段），紧接着又 `Clear()` 掉时间线——
+   自己把刚准备好的东西删了，尾句于是永远归因到 Unknown；之所以不是每次都失败，是因为
+   `DrainBlocking` 在队列满时直接放弃重试，worker 的迟到写入又会把时间线补回来一半。
+   修法是拆开这两个语义：会话结束**只冲尾不清空**，清空与时钟归零归 `Reset()`（新会话复用同一条管线时用，
+   此前它是不可达的死代码，现在有了公开入口与测试）；`DrainBlocking` 改成退让重试到期限——
+   收尾路径上放弃重试会让「已经冲完」变成谎话，而调用方正拿它当归因完成的依据。
 
 **真实权重冒烟（`tools/DiarizationProbe`）**。替身跑得再绿也证明不了「真实 metadata 读得对、
 真实输出宽度对得上 num_classes」，所以补一个吃真模型的探针。权重取参照实现钉的 sherpa 导出
@@ -499,4 +508,4 @@ final 最后、每轮一次 embedding、几何/采样率非法即拒），管线
 账本动作：D009 翻 resolved（缩窄为「声纹后端」并入 D033）；新增 D033（`ISpeakerEmbedding` 只有
 接缝、无模型实现——参照实现同样只有接缝，按参照边界接受）、C035（窗口几何，参照缺陷不复现）、
 `porting/reference-lock.voxa.json`。差异账 **70 条（resolved 52 / accepted 18 / gap 0）**——**首次 gap 归零**。
-测试 **449/449**（+34），全解决方案 0 警告 0 错误。
+测试 **450/450**（+35），全解决方案 0 警告 0 错误。

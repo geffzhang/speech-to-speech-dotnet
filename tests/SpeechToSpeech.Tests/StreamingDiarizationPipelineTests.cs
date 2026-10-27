@@ -181,6 +181,30 @@ public sealed class DiarizationHandlerTests
         Assert.True(attribution.Confidence > 0, "一整段单人语音应该能给出有信心度的标签");
     }
 
+    // 「会话结束」与「开新会话」是两件事：前者只停止（已判定的段还要给转写归因），后者才清空并归零。
+    // 混在一起曾经让尾句永远归因到 Unknown，而且是间歇性的——worker 的迟到写入会把时间线补回来一半。
+    [Fact]
+    public void Session_end_keeps_the_timeline_while_a_new_session_clears_it()
+    {
+        using var harness = new Harness(new ToneMaskSegmentation(WindowSamples));
+
+        var audio = DiarizationTone.Build(1.5, (0.0, 1.5, 0.5, 0.0));
+        for (int offset = 0; offset < audio.Length; offset += ChunkSamples)
+            harness.Push(audio.AsSpan(offset, Math.Min(ChunkSamples, audio.Length - offset)).ToArray());
+
+        harness.In.Add(PipelineControl.SessionEnd);
+        harness.WaitFor(
+            seen => seen.Any(item => PipelineControl.IsControlMessage(item, ControlKind.SessionEnd)),
+            "会话结束消息被转发出去");
+
+        Assert.NotEqual(0, harness.Timeline.Count);
+        Assert.Equal(audio.Length, harness.Handler.SamplesSeen);
+
+        harness.Handler.Reset();
+        harness.WaitFor(_ => harness.Handler.SamplesSeen == 0, "新会话把分离器时钟归零");
+        Assert.Equal(0, harness.Timeline.Count);
+    }
+
     [Fact]
     public void A_stalled_worker_becomes_a_timeline_gap_not_backpressure()
     {

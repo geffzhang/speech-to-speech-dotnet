@@ -163,9 +163,19 @@ public sealed class DiarizationHandler : BaseHandler<object, object>
     protected override void OnSessionEnd()
     {
         // 先把尾巴冲出来再往下传：STT 队列里还排着这次会话的音频，它们的归因要用到尾部那几个段。
+        //
+        // 这里**只冲尾、不清时间线**。清空与重置属于「新会话」（Reset），不是「会话结束」——把两件事
+        // 合在一起，刚冲出来的段会在 STT 用上之前被删掉，尾句于是永远归因到 Unknown。
         DrainBlocking(WorkKind.Flush);
-        _timeline.Clear();
     }
+
+    /// <summary>
+    /// 清空时间线并从头开始（同一条管线被复用给下一次会话时调用）。
+    ///
+    /// 与 <see cref="OnSessionEnd"/> 的分工：会话结束只是**停止**，已判定的段还要给转写归因用；
+    /// 真正开新会话才需要丢掉旧段、把分离器时钟归零。两步混在一起会两头落空。
+    /// </summary>
+    public void Reset() => _work.Writer.TryWrite(new Work(WorkKind.Reset));
 
     protected override void Cleanup()
     {
@@ -201,10 +211,20 @@ public sealed class DiarizationHandler : BaseHandler<object, object>
     private void DrainBlocking(WorkKind kind)
     {
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!_work.Writer.TryWrite(new Work(kind, done: done)))
+        var item = new Work(kind, done: done);
+        var deadline = DateTime.UtcNow + _options.FlushTimeout;
+
+        // 队列可能短暂满：这时放弃会让「已经冲完」变成谎话，而调用方正拿它当归因完成的依据
+        // （会话结束时 STT 队列里还排着音频）。所以退让重试到期限，而不是试一次就走。
+        while (!_work.Writer.TryWrite(item))
         {
-            // 队列满 = worker 已经落后很多，再排队只会等更久；尾巴本来也已经被时间轴缺口覆盖了。
-            return;
+            if (_workerCts.IsCancellationRequested || DateTime.UtcNow >= deadline)
+            {
+                _log?.Invoke("DiarizationHandler: 收尾时队列一直满，尾部未能提交；已判定的部分仍然写在时间线上。");
+                return;
+            }
+
+            Thread.Sleep(1);
         }
 
         if (!done.Task.Wait(_options.FlushTimeout))
