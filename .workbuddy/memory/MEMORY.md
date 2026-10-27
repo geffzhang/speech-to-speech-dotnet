@@ -59,8 +59,18 @@
 - **mel 滑动窗是因果对齐**：prev=240 零起步，窗口=prev+新 hop，prev=window[160..400]——不是 librosa 居中分帧；互证参照必须按此语义直算。
 - 重采样 1:1 不是恒等直通（0.45·fs 低通+半样本相移）；尾部 23 样本留延迟线（halfTaps−1）。
 - 转换层 `VisemeTimeline`：OVR15→MS21 映射表锁定（[0,21,18,17,19,20,16,15,19,13,2,4,6,3,7]），argmax+相邻合并成上游 {viseme,start_s,end_s} 区间。Core `Viseme` record 已改上游形状（VisemeId/StartSeconds/EndSeconds）。
-- 模型 `models/viseme/model.onnx`(10.7MB)+config.json 不入库（.gitignore models/）；端到端流式不变性测试由 `SPEECH_TO_SPEECH_VISEME_MODEL_DIR` 门控。管线接线（STV 级/visemes 事件/enable_visemes 配置）+ 说话人分离仍在 D009（gap）。
+- 模型 `models/viseme/model.onnx`(10.7MB)+config.json 不入库（.gitignore models/）；端到端流式不变性测试由 `SPEECH_TO_SPEECH_VISEME_MODEL_DIR` 门控。
+
+## 口型管线级（D032 resolved，2026-10-27）
+
+- `Core/Pipeline/Handlers/StvHandler`：上游 Wav2Vec2STVHandler 的等价物。**0.5 秒整窗一次推理**（窗口字节数=管线率，即 rate×0.5×2）、偏移=已推理样本数/管线率、窗口音频按 32ms 等价块（512@16k）重发、**visemes 只挂首块**、终态事件前冲尾、`cleanup_only` 不冲、上下文(response_key+代际)切换/会话结束重置、陈旧代际整窗丢弃。
+- 契约：`Core/Backends/IVisemeExtractor`（Extract(pcm16)→Viseme[]，时间相对本窗）；`BackendRegistry.RegisterViseme` 单工厂（CreateViseme 未启用回 null、启用无工厂即抛）。
+- `OpenLipSyncVisemeExtractor.Load(modelDir, pipelineRate)`：每次 Extract 重置上下文（=上游每窗一次 ASR）；int16 LE /32768 → float；帧时长 hop/16000；逐帧回调走 `SetFrameObserver(context)`（**别用后端级 VisemeFrameComputed——多连接会串帧**）。
+- 事件：`ServerEvent.OutputAudioVisemes`（含 content_index=0，visemes[{viseme,start_s,end_s}]）；`RealtimeConnection.EmitAudioAsync` **先发事件后发音频**，发完重校验 responseId 仍在。
+- 开关：`--enable_visemes`（默认关）/`--stv_model_dir`（回退 SPEECH_TO_SPEECH_VISEME_MODEL_DIR → models/viseme）；关时 `_stvIn` 为 null、TTS 直连 `_ttsOut`（未接线逐字节相同）；开却缺模型启动即失败。
+- 口径差异（C034）：本引擎整窗连续（静音也发 sil）vs 上游音素稀疏；时间量化 10ms。尾部少 10ms 是重采样延迟线（23 样本）。
+- Context 匹配陷阱：EndOfResponse 的 (response_key, generation) 必须与 AudioOutput 一致才冲尾——测试里代际给 null 对 0 会「看起来不冲」。
 
 ## 当前状态（2026-10-27）
 
-差异账 66 条：resolved 49 / accepted 16 / gap 1（仅剩 D009：口型管线接线+说话人分离）。测试 401/401。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy——mel/FFT 互证参照）。
+差异账 68 条：resolved 50 / accepted 17 / gap 1（仅剩 D009：流式说话人分离；口型已全通 D031+D032）。测试 415/415。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy——mel/FFT 互证参照）。
