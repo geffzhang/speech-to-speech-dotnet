@@ -113,7 +113,37 @@
 - 非阻塞分离级：有界队列 + 单 worker，**队列满 = 时间轴缺口**，绝不背压音频线程
 - 统一音频时钟：VAD 段 → 转写区间 → 分离段区间 join
 
-**不移植**：`DiarizationPipeline` + `SpeakerClustering`（离线批处理分离，输入整段音频返回 `DiarizedSegment[]`）——本仓库是流式实时管线，没有离线分离端点。**接受差异**：`ISpeakerEmbedding` 在参照实现里同样只有接缝无模型实现，见 D033。
+**不移植**：`DiarizationPipeline` + `SpeakerClustering`（离线批处理分离，输入整段音频返回 `DiarizedSegment[]`）——本仓库是流式实时管线，没有离线分离端点。
+
+### 声纹后端（本实现自建——参照实现只留了接缝，D033）
+
+参照实现（voxa）的 `ISpeakerEmbedding` 没有任何模型实现，所以这一层的口径**不是从它那儿来的**，
+而是取自 sherpa-onnx 的 `SpeakerEmbeddingExtractor`（`speaker-embedding-extractor-general-impl.h`
+与 `features.cc`）——这样能直接吃它发布的权重，而不是自己发明一套「差不多的」前端。
+
+| 项 | 内容 |
+|---|---|
+| 模型 | 3D-Speaker CAM++（`iic/speech_campplus_sv_zh_en_16k-common_advanced`，中英通用），ONNX 导出 |
+| 下载 | `https://hf-mirror.com/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx` |
+| 资产 | 28,281,164 字节，SHA-256 `aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2`，落 `models/speaker-embedding/model.onnx`（不入库） |
+| metadata | `framework=3d-speaker`、`sample_rate=16000`、`output_dim=192`、`normalize_samples=1`、`feature_normalize_type=global-mean` |
+| 输入 / 输出 | `x: [N, T, 80]`（T 动态）→ `embedding: [N, 192]` |
+
+前端口径（与 sherpa 的 `FeatureExtractorConfig` 默认值逐项对齐，实现在 `KaldiFbank`）：
+25 ms 帧长 / 10 ms 帧移、**povey** 窗、预加重 0.97、逐帧去直流、**`snip_edges=false`**（帧中心对齐，
+边界单边镜像 `−1→0`、`n→n−1`）、512 点 FFT（`round_to_power_of_two`）、80 个 kaldi 三角 mel 滤波器
+（20 Hz ~ Nyquist−400 Hz、自然对数 mel 轴 `1127·ln(1+f/700)`、权重不归一化）、log 前按
+**`FLT_EPSILON` = 1.1920929e-7** 截断（不是 `float.Epsilon`）、`global-mean` 逐维减时间均值。
+`use_energy=false`，所以特征就是 80 维 log-mel，不含能量项。
+
+**对拍记录**：用 `kaldi-native-fbank` 以同一组参数生成参照矩阵（3 秒真实语音，300 帧 × 80 维），
+逐元素最大差 **1.8e-4**，且全部集中在能量已接近 floor 的低频 bin（`log` 在 1e-7 量级的能量上对
+float 舍入极敏感）；端到端 embedding 与「knf + onnxruntime」参照的余弦相似度 **> 0.9999**。
+定点值以合成信号固化进 `KaldiFbankTests`（参照由同参数生成），不依赖任何音频素材入库。
+
+**阈值实测**（双人素材：英语 `TheGreatGatsby` 与西语 `es-ES` 交替 18.7 秒）：同人余弦距离
+**0.14–0.29**、异人 **0.71–0.84**；配置的 `MatchThreshold=0.45`（匹配）/ `NewSpeakerThreshold=0.62`
+（新建）在两者之间留了很宽的余量，不是贴着数据调的。
 
 **不跟随的参照缺陷（C035）**：参照实现构造期要求 `window % receptive_field_shift == 0`，而它钉的 sherpa 导出是 `window_size=160000` / `receptive_field_shift=270`（592.6 帧）——真权重一加载就被自己这条规矩拒掉，说明它的真模型路径从未跑过（测试道只有帧步长能整除的双音替身）。本实现把模型窗口向下取整到帧网格（592 帧 = 159840 样本 = 9.99 秒），默认跳长取 58 帧（15660，不是 59）以满足 own 区起点的奇偶约束；显式给的窗口/跳长仍严格拒绝。
 
