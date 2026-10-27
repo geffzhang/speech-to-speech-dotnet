@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 using SpeechToSpeech.Core.Audio;
@@ -11,7 +12,22 @@ internal static class Http
 {
     public static HttpClient CreateClient(string? baseUrl, string? apiKey)
     {
-        var client = new HttpClient
+        // 上游 httpx 只认环境变量代理（HTTP(S)_PROXY / ALL_PROXY / NO_PROXY），
+        // 从不读 Windows 系统代理。HttpClient 默认却按 WinINET 解析系统代理——
+        // 在挂了系统代理的机器上，连本机 llama.cpp / vLLM 的回环地址也会被塞进
+        // 代理隧道（NO_PROXY 环境变量管不到它），直接 502。对齐 httpx 口径。
+        var handler = new SocketsHttpHandler();
+        var proxyUri = EnvironmentProxy.ResolveEnvironmentProxy();
+        if (proxyUri is not null)
+        {
+            handler.Proxy = proxyUri;
+        }
+        else
+        {
+            handler.UseProxy = false;
+        }
+
+        var client = new HttpClient(handler)
         {
             Timeout = TimeSpan.FromMinutes(5),
         };
@@ -28,6 +44,100 @@ internal static class Http
         }
 
         return client;
+    }
+}
+
+/// <summary>
+/// 只按环境变量解析代理（对齐 httpx trust_env 语义）。
+/// <para>
+/// httpx 的规则：HTTP_PROXY 作用于 http 目标、HTTPS_PROXY 作用于 https 目标、
+/// ALL_PROXY 兜底；NO_PROXY 逗号分隔豁免表，条目按主机名匹配——点前缀（.example.com）
+/// 与裸域名都按「该域及其子域」豁免，<c>*</c> 全豁免。未设置任何代理变量时
+/// <see cref="ResolveEnvironmentProxy"/> 返回 null，调用方应彻底禁用代理解析。
+/// </para>
+/// </summary>
+internal sealed class EnvironmentProxy : IWebProxy
+{
+    private readonly Uri? _httpProxy;
+    private readonly Uri? _httpsProxy;
+    private readonly string[] _bypass;
+
+    internal EnvironmentProxy(Uri? httpProxy, Uri? httpsProxy, string[] bypass)
+    {
+        _httpProxy = httpProxy;
+        _httpsProxy = httpsProxy;
+        _bypass = bypass;
+    }
+
+    public ICredentials? Credentials { get; set; }
+
+    /// <summary>按环境变量解析出代理；没有代理变量时返回 null。</summary>
+    public static IWebProxy? ResolveEnvironmentProxy()
+    {
+        var http = GetProxyUri("HTTP_PROXY", "http_proxy");
+        var https = GetProxyUri("HTTPS_PROXY", "https_proxy");
+        var all = GetProxyUri("ALL_PROXY", "all_proxy");
+
+        if (http is null && https is null && all is null)
+        {
+            return null;
+        }
+
+        var bypass = ParseBypassList(
+            Environment.GetEnvironmentVariable("NO_PROXY")
+            ?? Environment.GetEnvironmentVariable("no_proxy"));
+
+        return new EnvironmentProxy(http ?? all, https ?? all, bypass);
+    }
+
+    private static Uri? GetProxyUri(params string[] names)
+    {
+        foreach (var name in names)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (!string.IsNullOrWhiteSpace(value) && Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri))
+            {
+                return uri;
+            }
+        }
+
+        return null;
+    }
+
+    private static string[] ParseBypassList(string? noProxy)
+    {
+        if (string.IsNullOrWhiteSpace(noProxy))
+        {
+            return [];
+        }
+
+        return noProxy.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    public Uri? GetProxy(Uri destination) => IsBypassed(destination)
+        ? null
+        : destination.Scheme == Uri.UriSchemeHttps ? _httpsProxy : _httpProxy;
+
+    public bool IsBypassed(Uri host)
+    {
+        var name = host.Host;
+        foreach (var entry in _bypass)
+        {
+            if (entry == "*")
+            {
+                return true;
+            }
+
+            var bare = entry.StartsWith('.') ? entry[1..] : entry;
+            // .example.com 或 example.com 都豁免该域及其子域（httpx 对点前缀的口径）。
+            if (name.Equals(bare, StringComparison.OrdinalIgnoreCase)
+                || name.EndsWith("." + bare, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 

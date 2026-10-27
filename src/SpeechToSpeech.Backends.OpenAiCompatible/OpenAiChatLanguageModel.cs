@@ -52,6 +52,7 @@ public sealed class OpenAiChatLanguageModel : ILanguageModelBackend
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
         var accumulator = new SentenceAccumulator();
+        var toolAccum = new SortedDictionary<int, ToolEntry>();
         var finished = false;
 
         while (!finished)
@@ -104,26 +105,125 @@ public sealed class OpenAiChatLanguageModel : ILanguageModelBackend
                     $"provider stopped the response: {finishReason}");
             }
 
-            var delta = choice["delta"]?["content"]?.GetValue<string>();
-            if (string.IsNullOrEmpty(delta))
+            var delta = choice["delta"];
+            var textPiece = delta?["content"]?.GetValue<string>();
+            // 上游 _iter_chat_stream_events：工具增量按 index 分桶聚合（name 覆盖、
+            // arguments 字符串累加），流末或下一组开始时统一产出。
+            var continuingTool = toolAccum.Count > 0;
+            if (continuingTool)
             {
-                continue;
+                AccumulateTools(toolAccum, delta?["tool_calls"]);
             }
 
-            foreach (var sentence in accumulator.Push(delta))
+            if (!string.IsNullOrEmpty(textPiece))
             {
-                yield return Chunk(sentence);
+                if (continuingTool)
+                {
+                    // 文本到达意味着上一组「文本段 + 工具调用」收束：先把文本余量
+                    // 吐完，再按 index 顺序产出已积累的工具调用。
+                    foreach (var sentence in accumulator.Flush())
+                    {
+                        yield return ChunkText(sentence);
+                    }
+
+                    foreach (var chunk in FlushTools(toolAccum))
+                    {
+                        yield return chunk;
+                    }
+                }
+
+                foreach (var sentence in accumulator.Push(textPiece))
+                {
+                    yield return ChunkText(sentence);
+                }
+            }
+
+            if (!continuingTool)
+            {
+                AccumulateTools(toolAccum, delta?["tool_calls"]);
             }
         }
 
         foreach (var sentence in accumulator.Flush())
         {
-            yield return Chunk(sentence);
+            yield return ChunkText(sentence);
+        }
+
+        foreach (var chunk in FlushTools(toolAccum))
+        {
+            yield return chunk;
         }
     }
 
-    private static LlmResponseChunk Chunk(string text)
+    private static LlmResponseChunk ChunkText(string text)
         => new LlmResponseChunk { Parts = [new AssistantTextPart { Text = text }] }.Normalize();
+
+    private static void AccumulateTools(SortedDictionary<int, ToolEntry> toolAccum, JsonNode? toolCalls)
+    {
+        if (toolCalls is not JsonArray calls)
+        {
+            return;
+        }
+
+        foreach (var node in calls)
+        {
+            if (node is not JsonObject call)
+            {
+                continue;
+            }
+
+            var index = call["index"]?.GetValue<int>() ?? toolAccum.Count;
+            var entry = toolAccum.TryGetValue(index, out var existing)
+                ? existing
+                : toolAccum[index] = new ToolEntry();
+            if (call["function"]?["name"]?.GetValue<string>() is { Length: > 0 } name)
+            {
+                entry.Name = name;
+            }
+
+            if (call["function"]?["arguments"]?.GetValue<string>() is { Length: > 0 } arguments)
+            {
+                entry.Arguments += arguments;
+            }
+        }
+    }
+
+    private static IEnumerable<LlmResponseChunk> FlushTools(SortedDictionary<int, ToolEntry> toolAccum)
+    {
+        foreach (var (_, entry) in toolAccum)
+        {
+            if (entry.Name.Length == 0)
+            {
+                continue;
+            }
+
+            // 上游 _tool_calls_from_accum：call_id 由服务端新生成（LiveKit 客户端
+            // 会截短超长 id，所以是 27 位 hex），提供方返回的 id 不透传。
+            yield return new LlmResponseChunk
+            {
+                Parts =
+                [
+                    new AssistantToolCallPart
+                    {
+                        Tool = new ToolCall
+                        {
+                            CallId = "call_" + Guid.NewGuid().ToString("N")[..27],
+                            Name = entry.Name,
+                            Arguments = entry.Arguments.Length > 0 ? entry.Arguments : "{}",
+                        },
+                    },
+                ],
+            }.Normalize();
+        }
+
+        toolAccum.Clear();
+    }
+
+    private sealed class ToolEntry
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Arguments { get; set; } = string.Empty;
+    }
 
     private JsonObject BuildPayload(LlmRequest request)
     {

@@ -6,6 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="SpeechToSpeech.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio.Core" Version="3.3.0" />
     <ProjectReference Include="..\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
   </ItemGroup>
 

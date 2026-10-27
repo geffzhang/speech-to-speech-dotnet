@@ -1,3 +1,5 @@
+using SpeechToSpeech.Core.Text;
+
 namespace SpeechToSpeech.Core.Backends;
 
 /// <summary>后端种类。</summary>
@@ -29,6 +31,35 @@ public sealed class BackendContext
     public required SttOptions Stt { get; init; }
     public required LlmOptions Llm { get; init; }
     public required TtsOptions Tts { get; init; }
+
+    /// <summary>
+    /// 端点判定与投机轮次配置（<c>speculative_reopen_ms</c> / <c>unanswered_reopen_ms</c> /
+    /// <c>smart_turn*</c>）。上游这几项挂在 VAD 参数对象上，本实现单独一组以免
+    /// 与 Silero 的模型/阈值混在一起。
+    /// </summary>
+    public TurnEndOptions TurnEnd { get; init; } = new();
+
+    /// <summary>
+    /// 端点判定器。null 表示本构建没有可用实现（暂无 ONNX 分类器），
+    /// 此时决策层报 <c>disabled</c> 并退回普通投机宽限。
+    /// </summary>
+    public ITurnEndClassifier? TurnEndClassifier { get; init; }
+
+    /// <summary>
+    /// 文本语言识别后端。缺省为 null → 助手语言检测不可用（上游缺 <c>lingua</c> 时同样退化为 null）。
+    ///
+    /// 与其它后端不同，它没有「名字」也没有模型选择：上游只有一个实现，
+    /// 缺失只影响 <c>--detect_llm_output_language</c> 的效果。
+    /// </summary>
+    public ILanguageDetector? LanguageDetector { get; init; }
+
+    /// <summary>
+    /// 对应上游模块参数 <c>--detect_llm_output_language</c>。
+    ///
+    /// 关掉时并非完全不做检测：上游仍会观察并写回 <c>last_assistant_language</c>，
+    /// 只是不拿它选本轮 TTS 语言。开关语义要照这个来，否则「关掉检测」会连带改变下一轮行为。
+    /// </summary>
+    public bool DetectLlmOutputLanguage { get; init; }
 
     /// <summary>日志输出；默认为 stderr。</summary>
     public Action<string> Log { get; init; } = message => Console.Error.WriteLine(message);
@@ -66,8 +97,8 @@ public static class BackendRegistry
         Stt("sense-voice", implemented: true),
         Stt("qwen3-asr", reason: "Qwen3-ASR 无 C# 运行时"),
         Stt("openai", implemented: true),
-        Stt("openai-realtime", reason: "上游 realtime 转写尚未移植（见差异账 D-05）", streams: true),
-        Stt("vllm-realtime", reason: "上游 realtime 转写尚未移植（见差异账 D-05）", streams: true),
+        Stt("openai-realtime", implemented: true, streams: true),
+        Stt("vllm-realtime", implemented: true, streams: true),
     ];
 
     /// <summary>LLM 后端清单。</summary>

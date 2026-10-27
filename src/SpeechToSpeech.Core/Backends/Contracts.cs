@@ -59,6 +59,18 @@ public sealed class SttOptions
 
     /// <summary>是否输出流式增量结果。</summary>
     public bool EmitPartials { get; init; } = true;
+
+    /// <summary>
+    /// 流式转写后端（openai-realtime / vllm-realtime）的会话模型 id。
+    /// 注意 <see cref="ModelName"/> 在 CLI 组合根里承载的是<b>后端名</b>，转写模型另存这里。
+    /// </summary>
+    public string? StreamingModel { get; init; }
+
+    /// <summary>WebSocket 连接与会话建立的超时（上游 openai/vllm_realtime_stt_connect_timeout，默认 10s）。</summary>
+    public double ConnectTimeoutSeconds { get; init; } = 10.0;
+
+    /// <summary>定稿转写的最长等待（上游 *_final_timeout，默认 60s）。</summary>
+    public double FinalTimeoutSeconds { get; init; } = 60.0;
 }
 
 /// <summary>LLM 参数。</summary>
@@ -106,12 +118,21 @@ public enum VadFrameKind
 }
 
 /// <summary>VAD 处理一块音频后的产出。</summary>
+/// <param name="SpeechEndSample">
+/// 这一段里<b>最后一个有声窗</b>的结束样本位（相对本次会话的累计样本流，不是段内偏移）。
+/// 用于算 <c>vad_decision_s</c>：从用户真的闭嘴到我们下结论，中间隔着判定器的静音确认窗口。
+///
+/// 与 <paramref name="AudioEndMs"/> 是两个量：段尾包含用来闭合这段的尾部静音，
+/// 拿它当「语音结束」会把静音长度从延迟里抹掉。后端给不出就留 null——
+/// 缺口写成 null 比写一个偏小的数字诚实。
+/// </param>
 public sealed record VadFrame(
     VadFrameKind Kind,
     float[]? Audio = null,
     int AudioStartMs = 0,
     int AudioEndMs = 0,
-    double DurationSeconds = 0);
+    double DurationSeconds = 0,
+    int? SpeechEndSample = null);
 
 /// <summary>
 /// VAD 后端接缝。
@@ -142,6 +163,43 @@ public interface ISttBackend : IDisposable
     string Name { get; }
 
     IEnumerable<PipelineMessage> Transcribe(VadAudio audio, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// 流式 STT 的 VAD 侧入口（上游 <c>StatefulStreamingSTTHandler</c> 的流式面：
+/// append_audio / start_turn / commit_boundary / discard_utterance / cancel_session）。
+///
+/// VAD 在说话过程中直接推音频，转写 partial 与普通后端一样走 STT 输出队列——
+/// <see cref="Pipeline.Handlers.TranscriptionNotifier"/> 已有 partial 消费路径。
+/// </summary>
+public interface IStreamingSttSink
+{
+    /// <summary>开口/复开：标记流式会话的当前轮次。</summary>
+    void StartTurn(string? turnId, int? turnRevision);
+
+    /// <summary>推入一段 16 kHz 单声道 float PCM（管线率，内部按需重采样）。</summary>
+    void AppendAudio(float[] samples);
+
+    /// <summary>段定稿：冲掉重采样尾样本并入队提交票据。</summary>
+    void CommitBoundary(string? turnId, int? turnRevision);
+
+    /// <summary>丢弃本轮未定稿的音频（barge-in / 空段）。</summary>
+    void DiscardUtterance();
+
+    /// <summary>会话结束：推进代际并断开远端连接。</summary>
+    void CancelSession();
+}
+
+/// <summary>
+/// 需要按连接挂载运行时资源（输出队列 / 投机轮次 tracker / 取消令牌）的流式 STT 后端。
+/// <see cref="Attach"/> 在管线装配期调用，返回的 sink 交给 <see cref="Pipeline.Handlers.VadHandler"/>。
+/// </summary>
+public interface IStreamAwareSttBackend : ISttBackend
+{
+    IStreamingSttSink? Attach(
+        System.Collections.Concurrent.BlockingCollection<object> queueOut,
+        Pipeline.SpeculativeTurnTracker speculativeTurns,
+        CancellationToken stopped);
 }
 
 /// <summary>一次 LLM 生成的输入快照。</summary>
