@@ -239,6 +239,23 @@ internal sealed class SpeakerPrototypes
         return 1.0 - Math.Clamp(dot / (Math.Sqrt(normA) * Math.Sqrt(normB)), -1.0, 1.0);
     }
 
+    // 两条声纹的余弦距离。分离器用它判断「这一批帧和那条已经认领了本窗口的段是不是同一个声音」——
+    // 同一段语音在一个窗口里被拆到两条本地通道上时，那是唯一能把「同一个人换了条通道」和
+    // 「两个人紧挨着说话」分开的证据。
+    internal static double CosineDistance(float[] a, float[] b)
+    {
+        if (a.Length != b.Length) return 2.0;
+        double dot = 0, normA = 0, normB = 0;
+        for (int i = 0; i < a.Length; i++)
+        {
+            dot += (double)a[i] * b[i];
+            normA += (double)a[i] * a[i];
+            normB += (double)b[i] * b[i];
+        }
+        if (normA <= 0 || normB <= 0) return 2.0;
+        return 1.0 - Math.Clamp(dot / (Math.Sqrt(normA) * Math.Sqrt(normB)), -1.0, 1.0);
+    }
+
     private static double[] Normalize(float[] embedding)
     {
         var unit = new double[embedding.Length];

@@ -15,8 +15,12 @@ namespace SpeechToSpeech.Audio.Diarization;
 ///
 /// <para><b>为什么是本地轮次而不是帧。</b>分割模型的说话人通道是<b>窗口内</b>的（这个窗口的 0 号通道
 /// 不是下个窗口的 0 号通道），所以帧不能按通道跨窗口累积。同一本地通道上连续的一段帧是一个
-/// <i>本地轮次</i>：它覆盖一段确定的音频，这段音频取一次声纹，跨窗口的身份由声纹携带。
+/// <i>本地轮次</i>：它覆盖一段确定的音频，这段音频取一次声纹，说话人的身份由声纹携带。
 /// 重叠能保留，是因为两个本地通道可以覆盖同一批帧，两个轮次都被发布。</para>
+///
+/// <para><b>跨窗口的身份靠时间重叠，不靠帧号也不靠通道号。</b>后一个窗口重报同一个轮次时，起点会抖
+/// 几帧、通道号可能换一条；而「这段时间已经被哪条段占着」不会变。所以一个轮次续接哪条段，按时间重叠量
+/// 决定（见 <c>Associate</c>）——这是真实权重上唯一稳的判据。</para>
 ///
 /// <para><b>一条段先发布、再延长。</b>第一个报出某个轮次的窗口创建它的段——未定，若还不够长就按连续性
 /// 借用标签——之后每个窗口延长同一条段（同一个 id），直到轮次的结尾落进 own 区，此时段定稿。
@@ -44,9 +48,9 @@ public sealed class StreamingDiarizer
     private float[] _embeddingScratch = []; // 复用：一次判定不该为一段音频分配
 
     private readonly Dictionary<string, Segment> _history = []; // 已发布的段，按创建顺序
-    private readonly Dictionary<int, string> _channelMap = [];  // 本地通道 -> 上一窗它在续接的段
     private readonly List<Segment> _open = [];                  // 仍在进行中的轮次
     private readonly HashSet<string> _touched = [];              // 本窗报出过的段
+    private readonly List<(long Start, long End)> _claimed = []; // 本窗已处理过的轮次跨度
 
     private readonly List<SpeakerSegmentUpdate> _updates = [];
     private readonly List<SpeakerMergeInfo> _merges = [];
@@ -215,8 +219,8 @@ public sealed class StreamingDiarizer
         if (ownedEnd <= ownedStart && !flush) return;
 
         _touched.Clear();
+        _claimed.Clear();
         long firstFrame = windowStart / _frameShift;
-        var channelMap = new Dictionary<int, string>(_channelMap);
 
         foreach (var turn in ExtractTurns(masks))
         {
@@ -230,25 +234,24 @@ public sealed class StreamingDiarizer
             // 收尾窗口会与流已经跑过的调度重叠，这条判断就是它不会把已完成的轮次当成新轮次再报一次的原因。
             if (turnEnd <= _frontier) continue;
 
-            var segment = Associate(turn, firstFrame, turnStartFrame, turnEnd, out bool alreadyCommitted);
+            var segment = Associate(turnStart, turnEnd, out bool alreadyCommitted);
             if (alreadyCommitted) continue;
 
             if (segment is null)
             {
-                segment = CreateSegment(turnStart, turnEnd, turnStartFrame, turnEndFrame);
+                segment = CreateSegment(turnStart, turnEnd);
             }
             else
             {
                 segment.EndSample = Math.Max(segment.EndSample, turnEnd);
-                segment.LastFrame = Math.Max(segment.LastFrame, turnEndFrame);
             }
 
             // 这条轨道在哪个窗口里最清楚：只逮住闭合帧（或尾部静音）的窗口会低估一个刚才还很明显的
             // 声音，而可信度是新建说话人的门槛。
             segment.Activity = Math.Max(segment.Activity, turn.Confidence);
 
-            channelMap[turn.Speaker] = segment.Id;
             _touched.Add(segment.Id);
+            _claimed.Add((turnStart, turnEnd));
 
             // 轮次的结尾落在本窗负责的区域内：这就是它几何的最终结论。
             bool ending = flush || turnEnd <= ownedEnd;
@@ -268,8 +271,6 @@ public sealed class StreamingDiarizer
             if (segment.EndSample <= _frontier && !_touched.Contains(segment.Id)) Finalize(segment);
         }
 
-        _channelMap.Clear();
-        foreach (var (channel, id) in channelMap) _channelMap[channel] = id;
 
         _frontier = Math.Max(_frontier, flush ? Math.Min(ownedEnd, SamplesSeen) : ownedEnd);
 
@@ -278,7 +279,7 @@ public sealed class StreamingDiarizer
         PruneHistory();
     }
 
-    private Segment CreateSegment(long startSample, long endSample, long firstFrame, long lastFrame)
+    private Segment CreateSegment(long startSample, long endSample)
     {
         var (previousSpeaker, gap) = FindPrevious(startSample);
         var segment = new Segment
@@ -286,8 +287,6 @@ public sealed class StreamingDiarizer
             Id = $"seg-{++_segmentCounter}",
             StartSample = startSample,
             EndSample = endSample,
-            FirstFrame = firstFrame,
-            LastFrame = lastFrame,
             PreviousSpeaker = previousSpeaker,
             PreviousGap = gap,
             // 还没有证据的轮次借用刚在说话的那个人——附和声，或者被窗口边界切开的续说。
@@ -324,6 +323,8 @@ public sealed class StreamingDiarizer
         double duration = (segment.EndSample - segment.StartSample) / (double)SampleRate;
         if (duration >= _config.MinEmbeddingDuration && EmbedSpan(segment.StartSample, segment.EndSample) is { } embedding)
         {
+            // 留着这条向量：同一段语音在别的窗口里被拆到另一条本地通道时，要靠它认出「还是这个人」。
+            segment.Voice = embedding;
             var decision = _prototypes.Decide(
                 embedding, duration, segment.Activity, segment.PreviousSpeaker, segment.PreviousGap, enrol);
             segment.Speaker = decision.Speaker;
@@ -391,64 +392,125 @@ public sealed class StreamingDiarizer
 
     // 这一批帧续接哪条进行中的段；没有能认领的返回 null。
     //
-    // 从窗口左沿开始的 run 在窗口打开时就已经在说话了：模型把它截断了，所以 run 的起点说明不了轮次从哪开始，
-    // 只有逐通道的映射能说它续接谁（重叠时两个通道覆盖同一批帧，光看帧分不出谁续谁）。
-    // 起点落在窗口内部的 run 本身就是一次独立的目击，用它自己的绝对起始帧做身份——该帧在后续窗口重报时不变。
-    private Segment? Associate(LocalTurn turn, long firstFrame, long turnStartFrame, long turnEnd, out bool alreadyCommitted)
+    // 身份<b>不是</b>「起点帧相等」，也<b>不是</b>「本地通道号」——这两样在真实权重上都不稳定：
+    //
+    // ① 起点会抖。模型对同一段语音的起点在相邻窗口里前后差几帧（0.5 附近的穿越点本来就不稳定），
+    //    实测同一句话在两个窗口里报出 9.67 与 9.59。拿「起点帧相差不超过 1 帧」认亲，抖一次就多一条新段。
+    // ② 通道号只在窗口内有效。同一个人在这一窗是通道 2、下一窗变成通道 1——因为这一窗里另一个人不在场，
+    //    轨道被排到了前面。按通道认亲，换一次通道就多一条新段。
+    //
+    // 这两条叠加，18.7 秒的素材算出了 29.1 秒的段：时间线上一堆互相咬住、谁也不延长谁的段。
+    //
+    // 稳定的只有一件事：**这段时间已经被谁占着**。所以认亲按时间重叠来，重叠最多的那条就是它。
+    // 重叠是绝对的音频时间，与窗口怎么切、模型把轨道排在第几条通道都无关。
+    //
+    // 本窗口已经被别的轮次认领过的段不参与比较：模型同时报出两个人时，两个轮次各自成段才对。
+    // 轮次按起点排序处理，先开口的那个人先认领，所以互相不会抢。
+    private Segment? Associate(long turnStart, long turnEnd, out bool alreadyCommitted)
     {
         alreadyCommitted = false;
 
-        // 先按「这个通道上一窗口在续接哪个段」认亲，而且**不论这个轮次是不是从窗口开头开始的**。
-        // 窗口约 10 秒、跳长不到 1 秒，所以一段 3 秒的话会被十来个窗口看到；后续窗口里它的起点
-        // 落在 own 区中间（StartFrame > 0），如果只在 StartFrame == 0 时才查通道映射，
-        // 这些窗口就只能靠 FindOpen 在**尚未结束**的段里找——而它早被 Finalize 移出 _open 了。
-        // 于是每个窗口都给它发一个新 id：时间线上是一堆互相咬住的段，总时长能超过音频本身。
-        Segment? tracked = null;
-        if (_channelMap.TryGetValue(turn.Speaker, out string? trackedId))
-            _history.TryGetValue(trackedId, out tracked);
-
-        if (tracked is not null)
-        {
-            // 上一段的帧区间盖住了本窗口看到的这一帧：同一个轮次又出现了一次。
-            if (turnStartFrame >= tracked.FirstFrame - 1 && turnStartFrame <= tracked.LastFrame + 1)
-            {
-                if (tracked.Extendable) return tracked;
-
-                // 已提交：本窗口这次观测能提供的信息它都有了。只有尾巴伸得更远才算新消息。
-                alreadyCommitted = turnEnd <= tracked.EndSample;
-                return null;
-            }
-
-            // 段还在长、而且一直长到本窗口开头：通道中间没有断过，继续用它。
-            if (turn.StartFrame == 0 && tracked.Extendable && tracked.LastFrame >= firstFrame - 1)
-                return tracked;
-
-            // 段已提交，而本窗口的轮次也结束在它结束的地方：这是后一个窗口在重报那个已完成的轮次
-            // （收尾窗口与它的前驱重叠），不是又发现了一个。
-            if (turn.StartFrame == 0 && !tracked.Extendable && turnEnd <= tracked.EndSample)
-            {
-                alreadyCommitted = true;
-                return null;
-            }
-        }
-
-        // 通道上没有人在续接，而这个轮次也不是从窗口开头开始的：它必是别的窗口已经开过的段。
-        if (turn.StartFrame > 0) return FindOpen(turnStartFrame);
-
-        return null; // 这个通道上没有人在说话：轮次确实从这里开始
-    }
-
-    // 后一个窗口重报的同一个轮次：模型从 run 自己的起点开始报，所以起点帧就是它还在窗口里时的身份。
-    // 两个重叠的说话人起点不同（万一撞上，先来的那个本窗已经认领了自己的段），
-    // 所以光靠位置不会把两个人粘成一段。
-    private Segment? FindOpen(long startFrame)
-    {
+        Segment? best = null;
+        long bestOverlap = 0;
         foreach (var segment in _open)
         {
             if (_touched.Contains(segment.Id)) continue;
-            if (Math.Abs(segment.FirstFrame - startFrame) <= 1) return segment;
+            long overlap = Math.Min(turnEnd, segment.EndSample) - Math.Max(turnStart, segment.StartSample);
+            if (overlap <= bestOverlap) continue;
+            best = segment;
+            bestOverlap = overlap;
         }
+        if (best is not null) return best;
+
+        // 本窗口已经被别的轮次认领的段：这段语音可能是同一个人换了条本地通道接着说。
+        if (FindChannelHandoff(turnStart, turnEnd) is { } handoff) return handoff;
+
+        // 没有进行中的段与它重叠：后一个窗口可能只是在重报一条已经定稿的段。
+        // 判据仍然不能用「起点相等」——起点同样会抖。
+        if (IsReReport(turnStart, turnEnd))
+        {
+            alreadyCommitted = true;
+            return null;
+        }
+
         return null;
+    }
+
+    // 同一段语音在一个窗口里被拆到两条本地通道上，是这个模型的常态：powerset 输出对通道编号是
+    // 排列无关的，它会把 9.62–9.94 放在通道 1、9.96–10.46 放在通道 2，两段之间只隔一帧。
+    // 状态机若照着通道各建一条段，时间线上就出现两条互相咬住、各说一半的段。
+    //
+    // 形态上和「两个人紧挨着说话」一模一样，所以判据不能是时间，只能**是声音本身**：
+    // 取这一批帧的声纹，跟那条已经认领了本窗口的段比一次，像就并进去，不像才是真的换人。
+    private Segment? FindChannelHandoff(long turnStart, long turnEnd)
+    {
+        long slack = GapSamples(_config.MinSilenceDuration);
+        double duration = (turnEnd - turnStart) / (double)SampleRate;
+
+        Segment? best = null;
+        long bestScore = long.MinValue;
+        bool bestIsContained = false;
+        foreach (var segment in _open)
+        {
+            if (!_touched.Contains(segment.Id)) continue;
+
+            long overlap = Math.Min(turnEnd, segment.EndSample) - Math.Max(turnStart, segment.StartSample);
+            long gap = turnStart - segment.EndSample;
+            if (overlap <= 0 && (gap <= 0 || gap > slack)) continue;
+
+            long score = overlap > 0 ? overlap : -gap;
+            if (score <= bestScore) continue;
+            best = segment;
+            bestScore = score;
+            bestIsContained = turnStart >= segment.StartSample - slack && turnEnd <= segment.EndSample + slack;
+        }
+        if (best is null) return null;
+
+        // 碎片：比 MinSpeechDuration 还短的一段够不上一个轮次，只有**被整段盖住**时才并进去——
+        // 它自己成段只会污染时间线，而它对标签的影响可以忽略（这个长度本来就不够判一个说话人）。
+        //
+        // 这一步必须排在「同时」判据之前：模型有时会在一段两秒的轨道中间给另一条通道亮两帧，
+        // 那不是第二个人，是噪声——按「同时」判就成了两个人。
+        // 也不能放宽成「接在后面就并」：新生说话人的第一次露头总是被窗口右沿截短成几帧，
+        // 那样它一整段的开头会被前一个人吞掉。
+        if (duration < _config.MinSpeechDuration) return bestIsContained ? best : null;
+
+        // 本窗口已经报出的轮次里，有跟它**同时在响**的：那就是真重叠（模型同时点亮两条通道），
+        // 这段语音属于另一个人。首尾相接才可能是同一个人换了条通道。
+        foreach (var (otherStart, otherEnd) in _claimed)
+        {
+            if (Math.Min(turnEnd, otherEnd) - Math.Max(turnStart, otherStart) > _frameShift) return null;
+        }
+
+        // 剩下的只是「像不像同一个人」的问题。段可能还没判过声——它短于新建说话人所需的证据
+        // 下限，要等收尾才判一次——这里就地取一次并留在段上：这一批帧是不是同一个人，只有这条向量能回答。
+        best.Voice ??= EmbedSpan(best.StartSample, best.EndSample);
+        if (best.Voice is null) return null;
+        if (EmbedSpan(turnStart, turnEnd) is not { } candidate) return null;
+
+        return SpeakerPrototypes.CosineDistance(best.Voice, candidate) <= _config.MatchThreshold ? best : null;
+    }
+
+    // 这个轮次是不是「某个已定稿的段被后一个窗口又报了一遍」：落在段的跨度之内就算。
+    //
+    // 余量按**实测的起点抖动**定（真实权重上同一句话的起点在相邻窗口之间差 3–8 帧，约 80 ms），
+    // 不是随手给个宽松值——余量再大就会把紧邻的下一段吞掉（同一通道上两段之间至少隔一个
+    // MinSilenceDuration，余量翻倍就够得着它了）。
+    //
+    // 为什么不担心「长段里的短插话被当成重报」：定稿要等 frontier 追上来，而 frontier 落后
+    // 最新音频半个窗口（约 4.5 秒）。所以一条段定稿时，它覆盖的音频早被前面的窗口跑过许多遍——
+    // 那里面若有别人的插话，早就成了自己的一条段，而且此刻还是进行中的，会先被上面的重叠匹配捞走。
+    // 走到这里时，落在已定稿段跨度内的轮次只可能是重报。
+    private bool IsReReport(long turnStart, long turnEnd)
+    {
+        long slack = 8L * _frameShift;
+        foreach (var segment in _history.Values)
+        {
+            if (segment.Extendable) continue;
+            if (turnStart < segment.StartSample - slack || turnEnd > segment.EndSample + slack) continue;
+            return true;
+        }
+        return false;
     }
 
     // 在 beforeSample 及之前结束的、最近的一条已发布段——短轮次或附和声最可能在续接的那位说话人。
@@ -552,7 +614,11 @@ public sealed class StreamingDiarizer
             if (active) turns.Add(new LocalTurn(s, startFrame, frames, sum / counted));
         }
 
-        turns.Sort((x, y) => x.StartFrame.CompareTo(y.StartFrame));
+        // 起点相同（两个人都在窗口左沿就在说话）时按通道序号定序：List.Sort 不是稳定排序，
+        // 少了这个次级键，同一段音频两次运行可能给出不同的轮次顺序。
+        turns.Sort((x, y) => x.StartFrame != y.StartFrame
+            ? x.StartFrame.CompareTo(y.StartFrame)
+            : x.Speaker.CompareTo(y.Speaker));
         return turns;
     }
 
@@ -580,8 +646,6 @@ public sealed class StreamingDiarizer
         public int Speaker { get; set; }
         public long StartSample { get; init; }
         public long EndSample { get; set; }
-        public long FirstFrame { get; init; }
-        public long LastFrame { get; set; }
         public int PreviousSpeaker { get; init; }
         public double PreviousGap { get; init; }
         public double Activity { get; set; } // 这条轨道在窗口内达到过的最强活动度
@@ -590,5 +654,6 @@ public sealed class StreamingDiarizer
         public bool Decided { get; set; }
         public long DecidedSample { get; set; } // 上一次判定所依据的结尾
         public double Confidence { get; set; }
+        public float[]? Voice { get; set; } // 最近一次判定所依据的声纹
     }
 }
