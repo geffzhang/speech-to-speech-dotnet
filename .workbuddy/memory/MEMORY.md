@@ -26,12 +26,17 @@
 - **测量点**：vad_decision_s 锚=最后有声窗；disabled 只写 status；接线不进语料（单测锁「谁写账本」）。
 - **Smart Turn**：ORT 钉 1.31.0（版本敏感差 0.12）；CT 跨步 25 取样；do_normalize=零均值单位方差；窗口尾 8s 前补零；判定与决策分离。
 - **语言层**：lingua-py ↔ lingua-rs 互证；一轮只解析一次；关掉检测仍观察写回。
+- **STT 识别语言**：只有 whisper 系消费 `language`（上游默认 `en`，`auto` = 完全不传让模型判）；ManySpeech 无运行期入口，只能写**临时 conf 副本**（原件不动，D034）；paraformer 等不消费——与上游一致。
 
 ## 真跑
 
 - `serve`+`tools/smoke/`：serve_smoke（完整说话时间线）、oob_smoke/oob_leak_probe（历史污染两招）、tool_call_smoke（llama-server 真链）、error_shape_smoke、**webrtc_smoke（aiortc 互证，D003）**。
 - 冒烟脚本的 HTTP 用 ProxyHandler({})（Windows 系统代理劫持 127.0.0.1，D029 镜像）；后台服务用 run_in_background。
 - 模型：VAD=ModelScope `silero-vad-v5-onnx`；TTS/LLM 走 hf-mirror resolve/main+Range 断点；TensorSharp 用 `qwen35`（无 qwen2）。
+- **权重位置**：仓库 `models/` 只有 pyannote/speaker-embedding/viseme；四段管线全在 `C:\Users\geffzhang\Models\s2s\`（`vad5/`、`whisper/` tiny、`tts/` 5.5G、`smart-turn/`、`llm/`、`llm35/Qwen3.5-0.8B-Q4_K_M.gguf`）。「补模型」= 把 serve 指过去，不是下载。
+- 端到端启动（四后端真权重）：`serve --vad_model_dir <s2s>/vad5 --whisper_model_dir <s2s>/whisper --whisper_language zh --qwen3_model_dir <s2s>/tts --smart_turn_model_path <s2s>/smart-turn/smart-turn-v3.2-cpu.onnx --llm_model_path <s2s>/llm35/Qwen3.5-0.8B-Q4_K_M.gguf`，配 `serve_smoke.py --url ws://127.0.0.1:8791/v1/realtime`。真权重下 `smart_status=complete`（此前一直 disabled）。
+- 时延参考：TTS 首轮 ~95s（含 5.5G 加载）/ 热态 ~30s/段；qwen35 CPU per-op decode ~3.1s/轮（无 full-decode 图）。TensorSharp 收 qwen2 会在**流里**抛 `Unsupported architecture: qwen2`（表现为 output_items=0），必须 qwen35。
+- 构建前先停 serve，否则 dll 被锁报 MSB3027；遇到「当文件已存在时无法创建」→ `dotnet build-server shutdown`。
 
 ## WebRTC（D003 resolved，2026-10-27）
 
@@ -90,4 +95,4 @@
 
 ## 当前状态（2026-10-27）
 
-差异账 72 条：resolved 55 / accepted 17 / **gap 0**。测试 470/470。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy、**kaldi-native-fbank + onnxruntime**——fbank/embedding 对拍参照）。
+差异账 73 条：resolved 56 / accepted 17 / **gap 0**。测试 479/479。参照环境：Python 3.13 venv 在 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（含 aiortc 1.15、numpy、**kaldi-native-fbank + onnxruntime**——fbank/embedding 对拍参照）。
