@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SpeechToSpeech.Audio.Diarization\SpeechToSpeech.Audio.Diarization.csproj" />
     <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.PyannoteDiarization\SpeechToSpeech.Backends.PyannoteDiarization.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.SpeakerEmbedding\SpeechToSpeech.Backends.SpeakerEmbedding.csproj" />
   </ItemGroup>
 
 </Project>
