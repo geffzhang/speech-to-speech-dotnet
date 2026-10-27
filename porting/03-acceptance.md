@@ -139,9 +139,9 @@
   `hold_s` 由等待观察者折算成区间并集
 - [x] 宽限与处理延迟真的挡住工作（D021）—— 这是本轮查出的更大缺口：状态机的判定原先没有任何
   阶段去等，陈旧轮次的文字照样说出口。输出侧阻塞等闸门、输入侧按 `ProcessingDeadline` 等
-- [ ] **`vad_settle_s` 未记**（D022）—— 只在日志行里出现，不进 metadata；不要与 `hold_s` 混为一谈
-- [ ] **工具输入记账未移植**（D020）—— `s2s_tool_input_call_ids` 不发（客户端的伪造会被删掉），
-  且 `pending_function_calls` 参与的 anchor 关闭规则未接
+- [x] `vad_settle_s` 已记（D022 **已解决 2026-10-26**）—— 整段输入闸门的等待单独记账，不要与 `hold_s` 混为一谈
+- [x] 工具输入记账已接（D020 **已解决 2026-10-26**）—— `s2s_tool_input_call_ids` 会发（客户端伪造的会被删掉），
+  且 `pending_function_calls` 参与的 anchor 关闭规则一并接上
 
 ## 语言层锁定
 
@@ -193,7 +193,10 @@
 - [x] **真跑打断**（2026-10-26）—— `--speak-twice --gap 3`：第二段在第 1 轮响应进行中推入，触发 `response.cancel`。
       修复前（C024）第一轮的取消把整条连接的丢弃保护永久打开，第二轮响应只有 `response.created` 与空的 `response.done`；
       修复后第二轮完整出转写、分片与终态，被取消的第一轮照常发 done（`status=cancelled`）并回滚历史。
-- [ ] **容器内** —— 未做（E002）：无 Dockerfile、无发布包
+- [x] **容器内**（E002 **已解决**）—— `Dockerfile`（多阶段：`sdk:10.0` restore/publish → `aspnet:10.0`，EXPOSE 8765，模型卷 `/models`）+ `.dockerignore` + `docker-compose.yml`。
+      实跑：镜像 1.14 GB 构建成功、容器内 `serve` 干净启动、宿主冒烟客户端经容器协议层打到 `host.docker.internal` 上的 llama-server，`tool_call_smoke` 与 `error_shape_smoke` 双绿。
+      实跑中修掉两处打包缺陷：`ENTRYPOINT` 用错程序集名（`AssemblyName` 是 `speech-to-speech`）；compose 的 `llm_base_url` 带 `/v1` 后缀会拼成 `/v1/v1/chat/completions`。
+      NuGet 发布不在范围（行为等价重写，无对外包面）
 - [ ] **跨平台**（Windows / Linux / macOS）—— 代码路径齐备：`serve` 纯托管代码，理论跨平台；`talk`/`local` 音频后端三平台均接入——Windows（WASAPI + WinMM）、Linux（ALSA）、macOS（PortAudio，PortAudioSharp2 1.0.6，E001 已解决）。Windows 已实跑设备创建；**Linux 与 macOS 未在真实设备上跑过**（绑定冒烟 3 例通过）
 - [ ] **带真实音频设备的一轮对话** —— 仍未做：`local`/`talk` 需要真人对着麦克风说话，本轮用 `serve` + 脚本化客户端替代，验证的是同一套协议与管线
 - [x] **跨传输** —— WebSocket 与 WebRTC 双通路（D003 **已解决 2026-10-27**）。`SessionTransport` 抽象分出
@@ -212,18 +215,18 @@
 |---|---|---|
 | 音频层差分语料为空 | 模型推理受浮点累加顺序影响，不可逐字节比对 | 改锁采样率/声道/位深/段数/时长误差带，不比样本值 |
 | 有声窗位置由能量门限判定（D019 / D002） | `vad_decision_s` 的锚点是「最后一个有声窗」，本实现按块能量判有声，上游按 Silero 概率判。噪声底高的环境里两者会差一两个窗（约 32–64 ms） | 粒度与上游一个 VAD 窗同量级；缺口比「用段尾」小一个数量级——段尾含闭合静音，会把延迟整段抹成 0 |
-| `vad_settle_s` 的判定依赖 `Mode="final"` | 本实现无 progressive 产出，所有定稿段都带 `final`，口径与上游一致；但上游 progressive 转写路径本身未移植（D005） | 低——D005 补齐时需一起核对 `vad_settle_s` 的分段记账 |
+| `vad_settle_s` 的判定依赖 `Mode="final"` | 本实现定稿段都带 `final`，口径与上游一致；progressive 转写路径已由 D005 补齐（流式后端边收边出 partial） | 低——progressive 真正打开后需按 streaming 路径复核 `vad_settle_s` 的分段记账，留给真实流式后端联调一并做 |
 | 函数调用未进 `response.output`（D023，**已解决 2026-10-27**） | 输出项状态机与 `ResponseOutput.Merge` 合并排序已就位，协议语料 39/39、真跑回归通过；**未经真实工具链路验证**——本实现的测试 LLM（qwen35）没有稳定的工具调用产出，`AssistantToolCallReadyEvent` 端到端只由假后端走过 | 需要一个会发工具调用的 LLM 后端（如 OpenAI 兼容端）跑一轮真链路 |
 | ~~带外响应未实现（D024）~~ **已解决 2026-10-27** | 侧问会污染会话历史 | 四处一起补齐：metadata 不挂工具输入、不建时延账、输出不写回历史（哨兵词+item.delete 双证）、`conversation_id` 报 null；协议语料 40/40，真跑 `oob_leak_probe.py` 闭环 |
 | 每响应音色覆盖未实测（D017 已补） | 代码路径已打通（`ResolveVoice` → `TtsInput.Voice` → 后端 `Speaker`），但只由假后端验证过「值确实传到了」 | 低——真实 Qwen3-TTS 对不支持的音色会忽略，这层校验在模型侧；缺的是端到端听感验证 |
 | `local` / `talk` 未实跑（真实音频设备） | 队列时序与背压已经 `serve` + 脚本化客户端验证过两轮与打断；剩下的是真实全双工声学场景（回声、设备延迟） | 带麦克风/扬声器跑 `local`，听感验证 TTS 音色（顺带闭合 D017 的端到端验证） |
 | 接合点的时序与真实后端的交互 | `VadHandler` 与真实 VAD 后端的两轮/打断交互已用脚本化客户端实跑（C023/C024 由此暴露并修复）；剩余的是真实麦克风/扬声器下的全双工行为（回声、半双工时序） | 低——协议与管线层面已闭合，剩下的是声学环境问题，不影响行为等价判定 |
 | Smart Turn 判定的「incomplete」路径未在真实音频上触发 | 判定器概率已与参照链路逐值对齐（合成音频 <1e-4），但手头的测试音频截断处恰好语义完整，参照侧也判 complete | 低——incomplete 之后的决策（推迟 600ms、max_wait 2000ms、复开）由 `corpus/smart-turn` 13 条语料与 `TurnEndTiming` 单测锁定；真实对话中自然会出现 |
-| 实时转写未移植（D005） | `openai-realtime` / `vllm-realtime` 两个 STT 后端不可用 | `BackendUnavailableException` 显式报错，不静默降级 |
+| 实时转写（D005 **已解决**） | `openai-realtime` / `vllm-realtime` 两个 STT 后端已实现——wire dialect（六方法 + 端点 URL/setup 校验逐条对齐）、worker 的命令队列/代际/毒轮/partial 发布/握手、VAD 侧 `StartTurn`/`AppendAudio`/`CommitBoundary`/`DiscardUtterance` 全部接线，`StreamingSttProtocolTests` 28 + `StreamingSttSessionTests` 14 + `StreamingSttBackendTests` 5 | 剩下的是**真实服务端联调**（手头没有这两家的流式端点，账本只覆盖到 fake WS 表征）；失败仍走 `BackendUnavailableException`，不静默降级 |
 | 音频后端跨平台不全（**E001 已解决 2026-10-27**） | macOS 已接入 PortAudio（PortAudioSharp2 1.0.6，与上游 sounddevice 同引擎）；Linux ALSA 路径仍未实跑 | Windows 已实跑设备创建；Linux 需在装有 `libasound.so.2` 的机器上验证；macOS 需真机跑一轮 `talk`（发布时带 osx-x64/osx-arm64 原生库） |
 | 语言识别的原生库覆盖不全（D006 已补） | lingua 原生库只有 win-x64 / linux-x64 / osx-arm64；其余平台（Linux arm64、macOS x64）该后端抛 `BackendUnavailableException` | 与 E001 同一类平台缺口，不静默降级；补包即可，不影响决策层（决策层与检测器解耦，已有 25 例单测） |
 | 语言识别结果未在真实对话上验证 | `corpus/lang` 证明与上游逐值一致，但那只覆盖决策层；「TTS 是否真的换了发音」需要听 | 低——参数已按上游口径接到 `TtsRequest.Language`，剩下是后端行为 |
-| 无容器镜像（E002） | 无法在服务端标准部署 | 服务端可 `dotnet run`，但缺可复现交付物 |
+| ~~无容器镜像（E002）~~ **已解决** | 曾有「无法在服务端标准部署」的风险 | `Dockerfile` + `docker-compose.yml` 已入库并实跑（容器内 `serve` + 宿主客户端全链 PASS）；NuGet 发布仍不在范围 |
 | 模型惰性加载（E003） | 缺模型时首次合成才失败，而非启动即失败 | 可加 `--check-models` 预检子命令 |
 
 ---
@@ -238,6 +241,10 @@ python C:/Users/geffzhang/.workbuddy/skills/cross-lang-porting/scripts/reference
 # 2. 差异登记账校验——每条必须有编号、原因、决策
 python C:/Users/geffzhang/.workbuddy/skills/cross-lang-porting/scripts/diff_register.py lint
 python C:/Users/geffzhang/.workbuddy/skills/cross-lang-porting/scripts/diff_register.py render
+
+# 2b. 账本状态与文档措辞一致性——状态翻了 resolved，叙述层不能还写着「未实现」
+#     一个状态翻掉的条目会牵动四本账的叙述，靠人读不成立；2026-10-27 一次查出 10 处
+python tools/ledger/check_doc_sync.py --strict
 
 # 3. 构建与测试
 dotnet build SpeechToSpeech.slnx --no-incremental
@@ -262,16 +269,23 @@ python <skill>/scripts/diff_corpus.py verify --corpus corpus/smart-turn --json-c
 python <skill>/scripts/diff_corpus.py verify --corpus corpus/latency --json-canonical \
   --cmd "dotnet tools/LatencyProbe/bin/Debug/net10.0/LatencyProbe.dll"
 
-# 5. 协议覆盖审计（与上游 26 种事件比对，当前 25/26）
+# 5. 协议覆盖审计（与上游 26 种事件比对，当前 26/26）
 python tools/refprobe/protocol_coverage.py
 ```
 
 重录基线只在参照实现或上游文本层变动时做，且**先逐条看差异再决策**，不要一把 `--update` 全过。
 录制环境（nltk / punkt_tab 版本）见 `corpus/text/README.md`。
 
-**结论**：构建、单元、文本层、协议形状层、轮次状态机层与语言层验收通过；端到端经 `serve` + 脚本化客户端实跑闭合——单轮、同连接第二轮（gap 25 s）、打断（gap 3 s）与 TTS 音频完整收口四个场景都完整走通，队列时序、时延账（含 `tts_ttfa_s` / `e2e_s`）与投机轮次在真实模型链上得到验证；Smart Turn 判定器（D018）已补齐并经 fixture 逐值对齐 + 真跑验证；函数调用的输出项生命周期（D023）已补齐并经协议语料与真跑回归。本实现可作为「四段管线 + Realtime 协议 + 投机轮次 + Smart Turn + TTS + 工具调用输出项 + 带外响应」的可运行基线。剩余空白集中在真实音频设备的 `local`/`talk` 听感验证与容器内实跑（E002 三件套就绪、静态验证已过，待 Docker 引擎）。工具调用链已闭环：chat-completions 后端补上 delta.tool_calls 流式聚合（D028），真实 LLM 端到端以脚本化 mock 服务验证全链 PASS——后续接任何 OpenAI 兼容服务（llama.cpp server / vLLM）即为真实模型端到端。error 事件的 make_error 类形状归位（D027）已解决——错误事件双构造线（make_error 的 error={message,type} vs schema 校验的 invalid_request_error+code）分流完毕，`send_correlated` 的 error.event_id 关联全量接上；空历史口径（D026）、instructions 回落（C027）与 `response.create` 的 `input` 数组（D025）此前已解决。至此 response.create 的全部入参语义（instructions/temperature/max_output_tokens/modalities/voice/conversation/input）与错误面都与上游对齐。
+**为什么要有 2b**：账本翻状态时，叙述层常常只改了「账本」那一处，四本账里的正文没跟上。2026-10-27 的
+巡检（由「WebRTC 未移植（D003）」这句话引起）一次查出 **10 处**：WebRTC 与 `Dockerfile` 明明已经落地、<!-- doc-sync: ignore -->
+两个流式 STT 后端已有 47 例测试，文档却分别写着「未移植」和「不可用」。两个方向都危险——正向让人
+低估实现（按文档判断「不支持」，实际能用），反向让人高估实现（按文档判断「已解决」，实际仍是缺口）。
+脚本按差异 ID 关联行内措辞；**历史叙述**（「当时写成 X，后来改掉」这类必须保留原话的句子）在该行末尾
+加 `<!-- doc-sync: ignore -->` 豁免。
 
-协议层已从「客户端可能看不到回复」补到 25/26 覆盖：消息项生命周期（`output_item.added` →
+**结论**：构建、单元、文本层、协议形状层、轮次状态机层与语言层验收通过；端到端经 `serve` + 脚本化客户端实跑闭合——单轮、同连接第二轮（gap 25 s）、打断（gap 3 s）与 TTS 音频完整收口四个场景都完整走通，队列时序、时延账（含 `tts_ttfa_s` / `e2e_s`）与投机轮次在真实模型链上得到验证；Smart Turn 判定器（D018）已补齐并经 fixture 逐值对齐 + 真跑验证；函数调用的输出项生命周期（D023）已补齐并经协议语料与真跑回归。本实现可作为「四段管线 + Realtime 协议 + 投机轮次 + Smart Turn + TTS + 工具调用输出项 + 带外响应」的可运行基线。剩余空白集中在真实音频设备的 `local`/`talk` 听感验证。工具调用链已闭环：chat-completions 后端补上 delta.tool_calls 流式聚合（D028），真实 LLM 端到端以脚本化 mock 服务验证全链 PASS——后续接任何 OpenAI 兼容服务（llama.cpp server / vLLM）即为真实模型端到端。error 事件的 make_error 类形状归位（D027）已解决——错误事件双构造线（make_error 的 error={message,type} vs schema 校验的 invalid_request_error+code）分流完毕，`send_correlated` 的 error.event_id 关联全量接上；空历史口径（D026）、instructions 回落（C027）与 `response.create` 的 `input` 数组（D025）此前已解决。至此 response.create 的全部入参语义（instructions/temperature/max_output_tokens/modalities/voice/conversation/input）与错误面都与上游对齐。
+
+协议层已从「客户端可能看不到回复」补到 26/26 覆盖（最后一格 visemes 由 D032 补齐）：消息项生命周期（`output_item.added` →
 `content_part.added` → delta → `content_part.done` → `output_item.done`）、提交确认、会话项删除、
 转写失败的 item 作用域通告都已到位，并有 41 条差分语料与 27 条形状断言双重锁定。
 终态全部收口：取消回 `response.done`（status=cancelled）、`status_details` 对**任何终态都发**

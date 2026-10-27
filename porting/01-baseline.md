@@ -14,7 +14,7 @@
 | 上游测试 | 本实现测试 | 用例数 | 状态 | 说明 |
 |---|---|---|---|---|
 | `test_pipeline_messages.py` | `PipelineSemanticsTests.ResponsePrefetchTransactionTests` | 7 | 改写 | 上游 5 例（claim/cleanup/abort/discard），本实现 7 例——补了「弃置后注册的 abort 立即执行」与「无 claim 时 cleanup 挂起」两条边界 |
-| `test_speculative_turns.py`（跟踪器部分） | `PipelineSemanticsTests.CancelScopeTests` | 7 | 改写 | 上游用 68 例锁 HOLD/grace/stitching 全套状态机；本实现只锁代际与弃置保护 7 例，HOLD/grace 未移植 → **C006** |
+| `test_speculative_turns.py`（跟踪器部分） | `PipelineSemanticsTests.CancelScopeTests` + `corpus/turns` | 7 + 13 | 改写 | 上游 68 例 pytest 不照抄：代际与弃置保护走 7 例单测，HOLD/grace/复开等状态迁移改由 `corpus/turns` 13 条与上游 `SpeculativeTurnTracker` 逐方法对拍（C006 **已解决**，见「轮次层的实测结论」） |
 | `test_runtime_config.py` | `PipelineSemanticsTests.RuntimeConfigTests` | 9 | 改写 | 字段级深合并、未触碰嵌套字段保留、`turn_detection` 默认值与 OpenAI server VAD 对齐；另 4 例锁 `output_modalities` → `WantsAudio` 的四种取值（缺省/空数组/含 audio/text-only） |
 | `test_pipeline_messages.py`（TtsInput） | `PipelineSemanticsTests.TtsInputTests` | 3 | 移植 | `selected_language` → TTS 语言的 `"auto"`→null 语义逐条对齐 |
 | 上游无对应（F#09 handler 循环契约） | `BaseHandlerTests.BaseHandlerTests` | 5 | 新增 | 逐条覆盖 `BaseHandler` 六条契约：软控制转发不中断、`PipelineEnd` 断循环、异常只记录不终止线程、过期代际静默丢弃、两条路径都写终止哨兵 |
@@ -104,12 +104,13 @@
      现在响应级优先、会话级兜底，且同一个 `ResolveVoice` 同时喂协议载荷与 `TtsRequest.Speaker`。
      这类缺陷有个共同特征：字段看着对，行为没跟上——所以锁它的是单测（值是否真的到了后端），
      不是语料（语料只能证明字段在）。
-- 现在只剩 1 类**结构性差异**没有进语料：`response.metadata`（上游带 turn_latency 与工具输入
-  call_ids）本实现整个不发（D016）。不发而不是发空对象——空对象会表示「这轮没有遥测」，缺字段才
-  表示「本实现不上报」。
+- 曾记的最后一类**结构性差异**已闭合：`response.metadata` 现在会发（D016 **已解决 2026-10-26**），
+  终态时延四项由 D019 接线，工具输入 `s2s_tool_input_call_ids` 由 D020 补齐。当初那条判断仍然成立
+  ——不发而不是发空对象，因为空对象会表示「这轮没有遥测」，缺字段才表示「本实现不上报」——只是两侧
+  现在口径一致了。
 
-覆盖缺口由 `tools/refprobe/protocol_coverage.py` 量化：上游 26 种事件，本实现可构造 **25 种（96%）**，
-唯一缺的是扩展事件 `speech_to_speech.output_audio.visemes`（归 D009，口型未移植）。
+覆盖缺口由 `tools/refprobe/protocol_coverage.py` 量化：上游 26 种事件，本实现可构造 **26 种（100%）**。
+扩展事件 `speech_to_speech.output_audio.visemes` 由口型管线补齐（引擎 D031 + 管线级 D032，D013 翻 26/26）。
 
 **轮次层的实测结论**（`corpus/turns/`，13 条）：
 
@@ -139,8 +140,9 @@
 **端点判定层的实测结论**（`corpus/smart-turn/`，13 条）：
 
 这一层比的是上游 `_smart_turn_timing_ms` 的映射规则：判定结论 → （输出宽限 ms，处理延迟 ms）。
-判定器被替换成脚本化替身，因为真正的分类器是 ONNX 模型、本轮没移植（D018）——
-而这正说明「判定」与「拿到判定之后怎么办」该拆开：后者是纯函数，前者才是缺口。
+判定器在这一层被替换成脚本化替身——不是因为缺，而是因为这一层要钉的是「拿到判定之后怎么办」：
+后者是纯函数、能逐值比，前者（ONNX 分类器，D018 **已解决 2026-10-26**）另由概率对拍与单测锁。
+这也正是当初主张「判定」与「决策」必须拆开的理由。
 
 - **13/13 一致**，含阈值等号（`probability == threshold` 算没说完，上游是严格大于）、
   延迟大于最长等待时的钳制、判定器抛异常时的回落、以及窗口整理的取尾与左补零；
@@ -151,9 +153,9 @@
 - 音频不进语料文件，按 `((i*37) % 1000) / 1000.0` 现场生成——只用整数运算与一次
   `double → float32` 转换，IEEE 转换确定性保证两侧逐位相同。
 
-**判定器本身是缺口**（D018）：`--smart_turn` 默认开着但没有实现，决策层走 `disabled`
-分支（宽限 800、处理延迟 0），启动时打印显式告警。补的时候只需实现 `ITurnEndClassifier`
-并注入，不必动 `VadHandler`。
+**判定器已补齐**（D018 **已解决 2026-10-26**）：ONNX 实现，`ITurnEndClassifier` 按当初的约定注入，
+`VadHandler` 一行没动——「决策层与判定器分离」这条设计在真补的时候省了事。判定器概率与参照链路逐值
+对齐（合成音频 <1e-4），语料仍只覆盖纯函数那半边（那才是能逐值比对的部分）。
 
 **时延账层的实测结论**（`corpus/latency/`，16 条）：
 
