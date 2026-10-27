@@ -4,6 +4,7 @@
 
 `huggingface/speech-to-speech` 的 C# 行为等价重写。参照物锁定 `0835002`，`net10.0`。
 验收是**可观察行为一致**。任何不一致进 `porting/differences.jsonl` 编号；四本账在 `porting/`（02-differences 由 `diff_register.py render` 生成，**不要手改**）。动工前 `reference_lock.py check`。
+**状态翻了 resolved 必须同步改四本账正文**——不只改账本那一行。两向漂移都危险：正向让人低估实现（文档说不支持、实际能用），反向让人高估实现。自查 `python tools/ledger/check_doc_sync.py --strict`（守护清单 2b；按 ID 关联措辞，历史叙述用行尾 `<!-- doc-sync: ignore -->` 豁免，跳过 render 生成的 02）。
 
 ## 依赖与参考
 
