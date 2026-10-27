@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="SpeechToSpeech.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="ManySpeech.SileroVad" Version="1.1.2" />
     <PackageReference Include="ManySpeech.WhisperAsr" Version="1.0.1" />
     <PackageReference Include="ManySpeech.AliParaformerAsr" Version="1.1.9" />
