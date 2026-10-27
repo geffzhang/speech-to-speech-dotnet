@@ -24,6 +24,7 @@
     <ProjectReference Include="..\SpeechToSpeech.Backends.OpenAiCompatible\SpeechToSpeech.Backends.OpenAiCompatible.csproj" />
     <ProjectReference Include="..\SpeechToSpeech.Backends.SmartTurn\SpeechToSpeech.Backends.SmartTurn.csproj" />
     <ProjectReference Include="..\SpeechToSpeech.Backends.OpenLipSync\SpeechToSpeech.Backends.OpenLipSync.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Backends.PyannoteDiarization\SpeechToSpeech.Backends.PyannoteDiarization.csproj" />
   </ItemGroup>
 
 </Project>

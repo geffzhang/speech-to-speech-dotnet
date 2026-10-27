@@ -1,3 +1,5 @@
+using SpeechToSpeech.Audio.Diarization;
+using SpeechToSpeech.Backends.PyannoteDiarization;
 using SpeechToSpeech.Backends.SmartTurn;
 using SpeechToSpeech.Core.Backends;
 
@@ -273,6 +275,64 @@ internal static class OptionsBuilder
             }
         }
 
+        // 流式说话人分离。上游是 --diarization + --diarization_model_name（HF 仓库名 + Transformers）；
+        // 本构建吃本地 ONNX 文件，所以模型参数换成 --diarization_model，
+        // 另认 SPEECH_TO_SPEECH_DIARIZATION_MODEL（与端到端探针同一个环境变量）。
+        bool diarizationEnabled = line.BoolFlag(false, "diarization", "no_diarization");
+        var diarization = new DiarizationOptions
+        {
+            Enabled = diarizationEnabled,
+            SegmentationModelPath = line.Value("diarization_model", "diarization-model")
+                                    ?? Environment.GetEnvironmentVariable("SPEECH_TO_SPEECH_DIARIZATION_MODEL")
+                                    ?? (diarizationEnabled
+                                        ? Path.Combine("models", "pyannote-segmentation", "model.onnx")
+                                        : null),
+            Threshold = line.DoubleValue(0.5, "diarization_threshold", "diarization-threshold"),
+            WindowMs = line.IntValue(0, "diarization_window_ms", "diarization-window-ms"),
+            HopMs = line.IntValue(0, "diarization_hop_ms", "diarization-hop-ms"),
+            MaxSpeakers = line.IntValue(10, "diarization_max_speakers", "diarization-max-speakers"),
+            ContinuityWindowSeconds = line.DoubleValue(1.5, "diarization_continuity_s", "diarization-continuity-s"),
+            ThreadCount = line.IntValue(1, "diarization_threads", "diarization-threads"),
+        };
+
+        diarization.Validate();
+
+        // 打开分离却在启动时找不到模型：直接失败。上游此时同样在建管线时失败，
+        // 而「开了分离但永远没有 speaker 字段」会让客户端以为自己的解析坏了。
+        ISpeakerMaskSegmentation? segmentation = null;
+        if (diarization.Enabled)
+        {
+            string modelPath = diarization.SegmentationModelPath!;
+            if (!File.Exists(modelPath))
+            {
+                throw new BackendUnavailableException(
+                    "pyannote-diarization",
+                    $"启用流式说话人分离但模型未就位（需要 {modelPath}）；" +
+                    "用 --diarization_model 指定文件，或去掉 --diarization");
+            }
+
+            // 窗口长度要同时喂给引擎：Analyze 只接受它自己声明的那个长度，配置里写 3 秒而引擎按 10 秒切，
+            // 每一帧都会抛参数异常。所以先拿一次引擎几何（模型 6 MB，读一次比「参数静默不生效」便宜），
+            // 把毫秒意图取整到帧网格，再用这个长度建正式实例。取整规则与配置侧共用一处定义。
+            int windowSamples = 0;
+            if (diarization.WindowMs > 0)
+            {
+                using var geometryProbe = new PyannoteOnnxMaskSegmentation(modelPath, threadCount: diarization.ThreadCount);
+                windowSamples = DiarizationOptions.SnapToFrameGrid(
+                    diarization.WindowMs, geometryProbe.SampleRate, geometryProbe.FrameShiftSamples);
+            }
+
+            segmentation = new PyannoteOnnxMaskSegmentation(
+                modelPath, windowSamples, threadCount: diarization.ThreadCount);
+
+            // 声纹引擎本构建还没有实现（D033）：没有它就分不出「同一个人的第二段」，
+            // 标签永远缺失。这必须在启动时说清楚——静默地开着一个不产标签的开关，
+            // 比不提供这个开关更难排查。
+            Console.Error.WriteLine(
+                "warning: 本构建尚无 speaker embedding 引擎，--diarization 无法产出说话人标签（差异账 D033）。" +
+                "分割与时间线仍然运行，接上声纹引擎后即生效。");
+        }
+
         return new BackendContext
         {
             Vad = vad,
@@ -282,6 +342,9 @@ internal static class OptionsBuilder
             TurnEnd = turnEnd,
             TurnEndClassifier = turnEndClassifier,
             Stv = stv,
+            Diarization = diarization,
+            SpeakerSegmentation = segmentation,
+            SpeakerEmbedding = null,
             // 标志开着就先预热（上游同口径），否则第一次用语言识别时才加载模型。
             LanguageDetector = new LazyLanguageDetector(preload: detectLlmOutputLanguage),
             DetectLlmOutputLanguage = detectLlmOutputLanguage,

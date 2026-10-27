@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using SpeechToSpeech.Audio.Diarization;
 using SpeechToSpeech.Core.Audio;
 using SpeechToSpeech.Core.Backends;
 using SpeechToSpeech.Core.Pipeline;
@@ -116,6 +117,13 @@ public sealed class RealtimeConnection : IAsyncDisposable
 
     // 音频与事件队列
     private readonly BlockingCollection<object> _audioIn = new(new ConcurrentQueue<object>(), 64);
+
+    /// <summary>
+    /// VAD 的输入队列。启用流式分离时，音频先经 <c>DiarizationHandler</c> 走这里；
+    /// 关闭时这一级不存在，VAD 直接吃 <see cref="_audioIn"/>（与未接分离时逐字节相同）。
+    /// </summary>
+    private readonly BlockingCollection<object> _vadIn = new(new ConcurrentQueue<object>(), 64);
+
     private readonly BlockingCollection<object> _vadOut = new(new ConcurrentQueue<object>(), 64);
     private readonly BlockingCollection<object> _sttOut = new(new ConcurrentQueue<object>(), 128);
     private readonly BlockingCollection<object> _lmIn = new(new ConcurrentQueue<object>(), 32);
@@ -340,11 +348,42 @@ public sealed class RealtimeConnection : IAsyncDisposable
             streamingSink = streamAware.Attach(_sttOut, _speculativeTurns, token);
         }
 
+        // 流式说话人分离：VAD 之前的一级（分离要连续音频，只有原始输入有）。它同时产出
+        // 「谁在什么时候说话」的时间线，交给 STT 做转写归因。关闭时整级不存在，
+        // VAD 直接吃原始输入队列——两条路径的音频字节完全相同。
+        var vadInput = _audioIn;
+        SpeakerTimeline? speakerTimeline = null;
+        if (_backends.Diarization.Enabled)
+        {
+            if (_backends.SpeakerSegmentation is { } segmentation && _backends.SpeakerEmbedding is { } embedding)
+            {
+                speakerTimeline = new SpeakerTimeline(new SpeakerTimelineOptions());
+                var diarizerConfig = _backends.Diarization.BuildConfig(segmentation);
+                var diarizationOptions = _backends.Diarization;
+                var timeline = speakerTimeline;
+                vadInput = _vadIn;
+                AddThread("diarization", () => new DiarizationHandler(
+                    token, _audioIn, _vadIn, segmentation, embedding, diarizerConfig, timeline,
+                    diarizationOptions, _backends.Log).Run());
+            }
+            else
+            {
+                // 打开了分离却缺一个模型接缝：这一级跳过，转写照发、无说话人标签。
+                // 与「打开口型却没有模型」不同，这里不是配置错误而是能力缺口——
+                // 缺的是声纹引擎（D033），用户没有给错参数。
+                _backends.Log(
+                    "warning: 已启用流式说话人分离，但本构建缺少" +
+                    (_backends.SpeakerSegmentation is null ? "分割模型" : "声纹引擎") +
+                    "；本会话转写不带说话人标签。");
+            }
+        }
+
         AddThread("vad", () => new VadHandler(
-            token, _audioIn, _vadOut, _textEvents, vad, _cancelScope, _speculativeTurns,
+            token, vadInput, _vadOut, _textEvents, vad, _cancelScope, _speculativeTurns,
             _backends.TurnEnd, _backends.TurnEndClassifier, _backends.Log, _latency, streamingSink).Run());
         AddThread("stt", () => new SttHandler(
-            token, _vadOut, _sttOut, stt, _cancelScope, _speculativeTurns, _latency).Run());
+            token, _vadOut, _sttOut, stt, _cancelScope, _speculativeTurns, _latency,
+            speakerTimeline, _backends.Diarization.SpeakerIdPrefix).Run());
         AddThread("notifier", () => new TranscriptionNotifier(
             token, _sttOut, _lmIn, _textEvents, _config.InputAudioTranscriptionSnapshotsEnabled,
             _cancelScope, _speculativeTurns).Run());
@@ -400,7 +439,7 @@ public sealed class RealtimeConnection : IAsyncDisposable
     {
         List<BlockingCollection<object>> queues =
         [
-            _audioIn, _vadOut, _sttOut, _lmIn, _lmOut, _ttsIn,
+            _audioIn, _vadIn, _vadOut, _sttOut, _lmIn, _lmOut, _ttsIn,
         ];
         if (_stvIn is not null)
         {
@@ -1294,7 +1333,12 @@ public sealed class RealtimeConnection : IAsyncDisposable
         // 上游同一处置，并且顺手把这一轮的待定测量摘掉——不会有响应来认领它。
         if (completed.Transcript.Length > 0)
         {
-            _config.Chat.Append(ChatMessage.User(completed.Transcript, itemId));
+            // 说话人标签只进模型上下文，不进线上的转写事件：客户端拿到的是用户说的原话，
+            // 而模型需要知道这句话是谁说的（上游 SpeakerAttribution.for_llm 正是这个口径）。
+            var spoken = completed.SpeakerAttribution is { } attribution
+                ? $"[{attribution.SpeakerId}] {completed.Transcript}"
+                : completed.Transcript;
+            _config.Chat.Append(ChatMessage.User(spoken, itemId));
             _config.Chat.CommitTurn();
         }
         else

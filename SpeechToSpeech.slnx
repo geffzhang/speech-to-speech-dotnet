@@ -1,9 +1,11 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/SpeechToSpeech.Audio.Diarization/SpeechToSpeech.Audio.Diarization.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.Lingua/SpeechToSpeech.Backends.Lingua.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.ManySpeech/SpeechToSpeech.Backends.ManySpeech.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.OpenAiCompatible/SpeechToSpeech.Backends.OpenAiCompatible.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.OpenLipSync/SpeechToSpeech.Backends.OpenLipSync.csproj" />
+    <Project Path="src/SpeechToSpeech.Backends.PyannoteDiarization/SpeechToSpeech.Backends.PyannoteDiarization.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.QwenTts/SpeechToSpeech.Backends.QwenTts.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.SmartTurn/SpeechToSpeech.Backends.SmartTurn.csproj" />
     <Project Path="src/SpeechToSpeech.Backends.TensorSharp/SpeechToSpeech.Backends.TensorSharp.csproj" />
@@ -16,6 +18,7 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/ApiProbe/ApiProbe.csproj" />
+    <Project Path="tools/DiarizationProbe/DiarizationProbe.csproj" />
     <Project Path="tools/EvalProbe/EvalProbe.csproj" />
     <Project Path="tools/LanguageProbe/LanguageProbe.csproj" />
     <Project Path="tools/ProtocolProbe/ProtocolProbe.csproj" />
