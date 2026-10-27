@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpeechToSpeech.Backends.Lingua</RootNamespace>
+    <Description>基于 Panlingo.LanguageIdentification.Lingua 的文本语言识别后端。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Panlingo.LanguageIdentification.Lingua" Version="0.8.1" />
+  </ItemGroup>
+
+</Project>

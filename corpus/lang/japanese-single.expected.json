@@ -1,0 +1,6 @@
+{
+  "case": "japanese-single",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"ja\",\r\n  \"windows\": [\r\n    \"今日はとても良い天気ですね。\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

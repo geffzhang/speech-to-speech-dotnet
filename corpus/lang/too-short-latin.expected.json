@@ -1,0 +1,6 @@
+{
+  "case": "too-short-latin",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": null,\r\n  \"windows\": [\r\n    \"de la comida buena\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

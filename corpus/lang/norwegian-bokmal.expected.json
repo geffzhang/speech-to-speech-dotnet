@@ -1,0 +1,6 @@
+{
+  "case": "norwegian-bokmal",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"no\",\r\n  \"windows\": [\r\n    \"Jeg kan hjelpe deg med å finne det riktige svaret på spørsmålet.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

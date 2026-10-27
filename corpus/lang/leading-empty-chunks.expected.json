@@ -1,0 +1,6 @@
+{
+  "case": "leading-empty-chunks",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"en\",\r\n  \"windows\": [\r\n    \"\",\r\n    \"\",\r\n    \"Hello there, how can I help you today?\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

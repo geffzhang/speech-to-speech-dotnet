@@ -1,0 +1,6 @@
+{
+  "note": "超过 256 码点必须丢头保尾。结论看着奇怪（英文重复被判成 pt）正是关键：它是截断后窗口的真实判定，两边必须一致——结论「合理」不是验收标准，一致才是。",
+  "texts": [
+    "This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. "
+  ]
+}

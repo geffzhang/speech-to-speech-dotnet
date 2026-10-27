@@ -1,0 +1,6 @@
+{
+  "note": "检测器分得出 Bokmål(nb) 与 Nynorsk(nn)，但下游 TTS 语言表只认 no，所以 nb 必须归一化。漏了这步会让挪威语用户挑不到音色。",
+  "texts": [
+    "Jeg kan hjelpe deg med å finne det riktige svaret på spørsmålet."
+  ]
+}

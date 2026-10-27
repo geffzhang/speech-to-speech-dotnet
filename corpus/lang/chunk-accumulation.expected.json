@@ -1,0 +1,6 @@
+{
+  "case": "chunk-accumulation",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"en\",\r\n  \"windows\": [\r\n    \"Sure,\",\r\n    \"Sure,  I can\",\r\n    \"Sure,  I can  help you with that.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

@@ -139,6 +139,53 @@ public sealed class ChatSession
         }
     }
 
+    /// <summary>
+    /// 当前上下文里所有工具结果（<c>function_call_output</c>）的 <c>call_id</c>，去重后按码点序。
+    ///
+    /// 语义是「哪些工具结果真的到了模型」，所以取的是**送进这次生成的历史快照**，
+    /// 不是此刻的会话——生成期间客户端可能又追加了条目，那些没有到过模型，不能算。
+    /// 上游 <c>ChatHistory.tool_output_call_ids()</c> 的等价物。
+    /// </summary>
+    public IReadOnlyList<string> ToolOutputCallIds() => ToolOutputCallIds(Snapshot());
+
+    /// <summary>
+    /// 会话是否在等任何函数调用的结果。
+    ///
+    /// 上游 <c>has_pending_tool_calls</c>：assistant 消息发起的 call_id 还没有
+    /// 对应的 function_call_output 到达。与顺序无关——工具结果先于调用登记
+    /// 出现时同样算已应答（上游用字典登记/摘除，这里用集合差，语义相同）。
+    /// </summary>
+    public bool HasPendingToolCalls() => HasPendingToolCalls(Snapshot());
+
+    /// <summary>同上，但作用于任意消息序列——带内 <c>response.input</c> 要先与
+    /// 会话合并判断（上游校验进 <c>candidate_chat</c> 副本）。</summary>
+    public static bool HasPendingToolCalls(IEnumerable<ChatMessage> messages)
+    {
+        var answered = new HashSet<string>();
+        foreach (var m in messages)
+        {
+            if (m.Role == "tool" && !string.IsNullOrEmpty(m.ToolCallId))
+            {
+                answered.Add(m.ToolCallId);
+            }
+        }
+
+        return messages.Any(m => m.ToolCalls.Any(t => !answered.Contains(t.CallId)));
+    }
+
+    /// <summary>
+    /// 从任意消息序列里挑出工具结果的 <c>call_id</c>。
+    ///
+    /// 去重后再排序：同一个 <c>call_id</c> 被重复提交时，上游用的是集合语义，
+    /// 列两遍会让客户端按值比对时对不上。
+    /// </summary>
+    public static IReadOnlyList<string> ToolOutputCallIds(IEnumerable<ChatMessage> messages)
+        => [.. messages
+            .Where(message => message.Role == "tool" && !string.IsNullOrEmpty(message.ToolCallId))
+            .Select(message => message.ToolCallId!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(id => id, StringComparer.Ordinal)];
+
     public void Clear()
     {
         lock (_lock)

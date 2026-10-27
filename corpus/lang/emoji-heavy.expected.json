@@ -1,0 +1,6 @@
+{
+  "case": "emoji-heavy",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": null,\r\n  \"windows\": [\r\n    \"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

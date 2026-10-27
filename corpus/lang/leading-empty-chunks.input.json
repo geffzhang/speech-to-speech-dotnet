@@ -1,0 +1,8 @@
+{
+  "note": "空片与纯空白片先来，窗口不能被空格污染；随后正常文本照判。上游的 `(window + \" \" + text).strip()` 会把首尾空白吃掉，实现上容易漏掉 strip 这一步。",
+  "texts": [
+    "",
+    "   ",
+    "Hello there, how can I help you today?"
+  ]
+}

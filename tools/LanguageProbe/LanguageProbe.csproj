@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>LanguageProbe</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.Lingua\SpeechToSpeech.Backends.Lingua.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+  </ItemGroup>
+
+</Project>

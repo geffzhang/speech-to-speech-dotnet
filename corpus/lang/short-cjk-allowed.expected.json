@@ -1,0 +1,6 @@
+{
+  "case": "short-cjk-allowed",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"zh\",\r\n  \"windows\": [\r\n    \"好的，马上查。\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

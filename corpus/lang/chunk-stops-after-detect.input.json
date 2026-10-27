@@ -1,0 +1,8 @@
+{
+  "note": "判出之后再来的分片不得改动窗口，也不得改判。一轮回复中途换语言会让 TTS 前后音色不一致——windows 里后两片与第一片相同，就是这个「停止累积」的直接投影。",
+  "texts": [
+    "This is a complete English sentence.",
+    "And here is more text that would otherwise change things.",
+    "Ещё немного текста на русском языке для проверки."
+  ]
+}

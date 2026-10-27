@@ -283,6 +283,37 @@ public sealed class RealtimeResponseCreateParams
     public IReadOnlyList<string>? OutputModalities { get; init; }
 
     /// <summary>
+    /// <c>audio.output.voice</c>：本次响应指定的音色。
+    ///
+    /// 这是**逐响应覆盖**，优先于会话配置。它必须一路走到 TTS 后端，不能只在载荷上出现——
+    /// 报一个没生效的音色比不报更难查（客户端以为换了音色，听到的还是旧的那个）。
+    /// </summary>
+    public string? Voice { get; init; }
+
+    /// <summary>
+    /// <c>conversation</c>：<c>"auto"</c>（缺省，进默认会话）或 <c>"none"</c>（带外响应）。
+    /// </summary>
+    public string? Conversation { get; init; }
+
+    /// <summary>
+    /// 带外响应（<c>conversation="none"</c>）。对应上游 <c>is_out_of_band</c>。
+    ///
+    /// 带外响应对着一份临时上下文生成，从不接进默认会话：输出不写回历史、
+    /// <c>conversation_id</c> 报 null、metadata 不挂工具输入、不参与工具跟进抑制。
+    /// <c>"auto"</c>、缺省或任意其它值一律按带内处理。
+    /// </summary>
+    public bool IsOutOfBand => Conversation == "none";
+
+    /// <summary>
+    /// <c>input</c>：随响应携带的会话项数组（原样保留，逐项校验后使用）。
+    ///
+    /// null = 未携带；空数组也是有效值。带内时逐项进默认会话（进历史）；
+    /// 带外时不碰会话，随请求走，给一次性聊天做种子——input=null 读会话副本、
+    /// input=[] 用空聊天、input=[...] 用这些项做种子（上游 build_active_chat 三种口径）。
+    /// </summary>
+    public List<JsonObject>? Input { get; init; }
+
+    /// <summary>
     /// 本次响应是否要出音频。
     ///
     /// 复现上游 <c>response_wants_audio</c>：缺省（null 或空数组）或含 <c>"audio"</c> 即为真；
@@ -300,4 +331,22 @@ public sealed class RealtimeResponseCreateParams
 
     /// <summary>取本次响应最大输出 token：优先响应级，其次会话级。</summary>
     public int? ResolveMaxOutputTokens(RuntimeConfig config) => MaxOutputTokens ?? config.MaxResponseOutputTokens;
+
+    /// <summary>
+    /// 取本次响应的音色：优先响应级，其次会话级。
+    ///
+    /// 上游 <c>_build_response</c> 与 <c>_apply_session_voice_override</c> 用的是同一条顺序，
+    /// 所以载荷里报的值与真正拿去合成的值出自同一个判断——不做这一步就会出现
+    /// 「载荷说换了音色、合成还在用旧的」。
+    /// </summary>
+    public string? ResolveVoice(RuntimeConfig? config) => ResolveVoice(this, config);
+
+    /// <summary>
+    /// 音色解析的唯一表达式。
+    ///
+    /// 协议层（报什么）与 TTS 层（用什么）都走这一条：分成两份写法时，改一处忘另一处
+    /// 只会表现为「字段换了、声音没换」，读代码看不出来。响应级为空即视为未指定。
+    /// </summary>
+    public static string? ResolveVoice(RealtimeResponseCreateParams? response, RuntimeConfig? config)
+        => (string.IsNullOrEmpty(response?.Voice) ? null : response.Voice) ?? config?.Voice;
 }

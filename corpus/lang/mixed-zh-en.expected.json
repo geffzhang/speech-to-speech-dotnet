@@ -1,0 +1,6 @@
+{
+  "case": "mixed-zh-en",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"zh\",\r\n  \"windows\": [\r\n    \"我用 Python 写了一个脚本，跑起来没问题，it works fine.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

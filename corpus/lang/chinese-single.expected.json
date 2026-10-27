@@ -1,0 +1,6 @@
+{
+  "case": "chinese-single",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"zh\",\r\n  \"windows\": [\r\n    \"今天天气不错，我们去公园散步吧。\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,6 @@
+{
+  "case": "english-single",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"en\",\r\n  \"windows\": [\r\n    \"Let me check the weather forecast for tomorrow morning.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

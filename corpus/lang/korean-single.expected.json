@@ -1,0 +1,6 @@
+{
+  "case": "korean-single",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"ko\",\r\n  \"windows\": [\r\n    \"오늘 날씨가 정말 좋네요.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

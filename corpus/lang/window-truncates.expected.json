@@ -1,0 +1,6 @@
+{
+  "case": "window-truncates",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"pt\",\r\n  \"windows\": [\r\n    \"ponse. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response. This is a long response.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

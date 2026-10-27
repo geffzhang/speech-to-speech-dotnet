@@ -1,0 +1,6 @@
+{
+  "case": "chunk-stops-after-detect",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": \"en\",\r\n  \"windows\": [\r\n    \"This is a complete English sentence.\",\r\n    \"This is a complete English sentence.\",\r\n    \"This is a complete English sentence.\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}

@@ -1,0 +1,6 @@
+{
+  "case": "digits-only",
+  "exit_code": 0,
+  "stdout": "{\r\n  \"detected\": null,\r\n  \"windows\": [\r\n    \"123456789012345678901234567890\"\r\n  ]\r\n}\r\n",
+  "stderr": ""
+}
