@@ -1,0 +1,41 @@
+# 构建上下文里只留源码与构建定义——模型、冒烟脚本、账本、本地产物都不进镜像。
+# 模型走卷挂载（/models），不烧进镜像层。
+
+**/bin/
+**/obj/
+**/.vs/
+**/artifacts/
+
+# 本地数据与工具链产物
+.workbuddy/
+models/
+cache/
+porting/
+corpus/
+tools/smoke/
+tools/refprobe/
+
+# 文档与资产
+*.md
+!README.md
+assets/
+docs/
+demo/
+examples/
+
+# 脚本与配置
+*.py
+scripts/
+.github/
+tests/
+tools/*/
+
+# 例外：探针工程本身在 slnx 里，restore 需要
+!tools/ApiProbe/
+!tools/LanguageProbe/
+!tools/ProtocolProbe/
+!tools/SmartTurnProbe/
+!tools/LatencyProbe/
+!tools/TextProbe/
+!tools/TurnsProbe/
+!tools/VadProbe/

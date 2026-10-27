@@ -11,3 +11,8 @@ requests           # 同上
 numpy              # 上游 service.py 依赖链
 scipy              # 上游 service.py 依赖链
 starlette          # 只为核对 send_json 的 ensure_ascii 设置
+lingua-language-detector>=2.0.2   # 语言层基线；上游同一约束。C# 侧用同源的 lingua-rs 封装
+
+# 端点判定层不需要 onnxruntime / transformers：探针只用 torch 桩导入上游模块，
+# 被测的两个方法（_smart_turn_timing_ms / SmartTurnAnalyzer._prepare_audio）不碰它们。
+
