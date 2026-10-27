@@ -1,0 +1,19 @@
+{
+  "note": "函数调用项登场：added 阶段 arguments 恒空串、状态恒 in_progress——客户端据此先建立可关联的项，再等参数流。item 是 function_call 类型，无 role/content。",
+  "payload": {
+    "event": "response.output_item.added",
+    "args": {
+      "response_id": "resp_a",
+      "output_index": 1,
+      "item": {
+        "id": "item_b",
+        "object": "realtime.item",
+        "type": "function_call",
+        "call_id": "call_a",
+        "name": "get_weather",
+        "arguments": "",
+        "status": "in_progress"
+      }
+    }
+  }
+}

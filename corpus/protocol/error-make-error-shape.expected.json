@@ -1,0 +1,6 @@
+{
+  "case": "error-make-error-shape",
+  "exit_code": 0,
+  "stdout": "{\"error\": {\"event_id\": \"event_client_1\", \"message\": \"Unknown or invalid event: foo\", \"type\": \"unknown_or_invalid_event\"}, \"event_id\": \"<event_id>\", \"type\": \"error\"}\r\n",
+  "stderr": ""
+}

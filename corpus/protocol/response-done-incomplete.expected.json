@@ -1,6 +1,6 @@
 {
   "case": "response-done-incomplete",
   "exit_code": 0,
-  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"id\": \"resp_b\", \"object\": \"realtime.response\", \"output\": [], \"status\": \"incomplete\", \"status_details\": {\"reason\": \"max_output_tokens\", \"type\": \"incomplete\"}}, \"type\": \"response.done\"}\r\n",
+  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"audio\": {\"output\": {\"voice\": \"zf_xiaobei\"}}, \"conversation_id\": \"conv_a\", \"id\": \"resp_c\", \"object\": \"realtime.response\", \"output\": [], \"output_modalities\": [\"audio\"], \"status\": \"incomplete\", \"status_details\": {\"reason\": \"max_output_tokens\", \"type\": \"incomplete\"}, \"usage\": {\"input_token_details\": {\"audio_tokens\": 0, \"cached_tokens\": 0, \"image_tokens\": 0, \"text_tokens\": 2048}, \"input_tokens\": 2048, \"output_token_details\": {\"audio_tokens\": 0, \"text_tokens\": 4096}, \"output_tokens\": 4096, \"total_tokens\": 6144}}, \"type\": \"response.done\"}\r\n",
   "stderr": ""
 }

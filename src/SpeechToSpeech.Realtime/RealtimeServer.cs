@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using SpeechToSpeech.Core.Backends;
 using SpeechToSpeech.Core.Pipeline;
+using SpeechToSpeech.Realtime.Protocol;
+using System.Net.WebSockets;
+using System.Text;
 
 namespace SpeechToSpeech.Realtime;
 
@@ -56,12 +59,50 @@ public sealed class RealtimeServer
             }
 
             using var socket = await context.WebSockets.AcceptWebSocketAsync();
-            await using var connection = new RealtimeConnection(socket, _options, _backends);
-            await connection.RunAsync();
+
+            // 建连接会加载后端模型。路径写错、模型缺失都在这一步炸——不接住的话
+            // Kestrel 直接把 socket 关掉，客户端只看到「连上了又被断开」，服务端一行日志都没有。
+            // 上游也是把异常记下来（logging 默认到 stderr），再把原因告诉客户端。
+            try
+            {
+                await using var transport = new Transports.WebSocketTransport(socket);
+                await using var connection = new RealtimeConnection(transport, _options, _backends);
+                await connection.RunAsync();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                TranscriptLog.Error("realtime connection ended with an error", ex);
+                await TrySendConnectionErrorAsync(socket, ex.Message);
+            }
         });
 
         app.MapGet("/healthz", () => Results.Text("ok", "text/plain"));
 
         return app;
+    }
+
+    /// <summary>
+    /// 尽力把一条 <c>error</c> 事件送到客户端再关闭。
+    ///
+    /// 「尽力」是字面意思：连接可能已经半关，发送本身会抛——那种情况下正确的做法是放弃，
+    /// 而不是让清理路径再抛一次把原始异常盖掉。
+    /// </summary>
+    private static async Task TrySendConnectionErrorAsync(WebSocket socket, string message)
+    {
+        if (socket.State != WebSocketState.Open)
+        {
+            return;
+        }
+
+        try
+        {
+            var payload = Encoding.UTF8.GetBytes(ServerEvent.Serialize(
+                ServerEvent.Error(ErrorCodes.InternalError, message)));
+            await socket.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            TranscriptLog.Error("failed to report the connection error to the client", ex);
+        }
     }
 }

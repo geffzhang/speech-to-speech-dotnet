@@ -1,16 +1,54 @@
 {
-  "note": "用户打断后的终态。取消路径必须回 response.done，否则客户端会一直认为这一轮还在进行，后续请求被排队。status_details.type 必须与 status 同域（cancelled），不能借用 incomplete。",
+  "note": "用户打断后的终态。取消路径必须回 response.done，否则客户端会一直认为这一轮还在进行，后续请求被排队。status_details.type 与 status 同域（cancelled），reason 取 client_cancelled；已生成的那半句仍要在 output 里，状态为 incomplete。",
   "payload": {
     "event": "response.done",
     "args": {
       "response": {
-        "id": "resp_a",
         "object": "realtime.response",
+        "audio": {
+          "output": {
+            "voice": "zf_xiaobei"
+          }
+        },
+        "conversation_id": "conv_a",
+        "output_modalities": [
+          "audio"
+        ],
+        "output": [
+          {
+            "id": "item_b",
+            "object": "realtime.item",
+            "type": "message",
+            "role": "assistant",
+            "status": "incomplete",
+            "content": [
+              {
+                "type": "output_audio",
+                "transcript": "今天广州"
+              }
+            ]
+          }
+        ],
+        "id": "resp_b",
         "status": "cancelled",
-        "output": [],
         "status_details": {
           "type": "cancelled",
           "reason": "client_cancelled"
+        },
+        "usage": {
+          "input_token_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0,
+            "image_tokens": 0,
+            "text_tokens": 96
+          },
+          "input_tokens": 96,
+          "output_token_details": {
+            "audio_tokens": 0,
+            "text_tokens": 18
+          },
+          "output_tokens": 18,
+          "total_tokens": 114
         }
       }
     }

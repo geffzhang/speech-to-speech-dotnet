@@ -1,0 +1,48 @@
+{
+  "note": "终态 response.output 的混合项排序：消息项与函数调用项按 output_index 合并。客户端用 done 的 output[] 驱动函数执行，item 顺序与流式事件的下标一致是协议承诺。",
+  "payload": {
+    "event": "response.done",
+    "args": {
+      "response": {
+        "id": "resp_a",
+        "object": "realtime.response",
+        "status": "completed",
+        "status_details": { "type": "completed" },
+        "audio": { "output": {} },
+        "conversation_id": "conv_a",
+        "output_modalities": ["audio"],
+        "output": [
+          {
+            "id": "item_text",
+            "object": "realtime.item",
+            "type": "message",
+            "role": "assistant",
+            "status": "completed",
+            "content": [{ "type": "output_audio", "transcript": "我查一下天气。" }]
+          },
+          {
+            "id": "item_call",
+            "object": "realtime.item",
+            "type": "function_call",
+            "call_id": "call_a",
+            "name": "get_weather",
+            "arguments": "{\"city\":\"广州\"}",
+            "status": "completed"
+          }
+        ],
+        "usage": {
+          "input_tokens": 12,
+          "output_tokens": 8,
+          "total_tokens": 20,
+          "input_token_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0,
+            "image_tokens": 0,
+            "text_tokens": 12
+          },
+          "output_token_details": { "audio_tokens": 0, "text_tokens": 8 }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "case": "output-text-delta-emoji",
+  "exit_code": 0,
+  "stdout": "{\"content_index\": 0, \"delta\": \"搞定 😀👍 还有 🎉 和 🇨🇳\", \"event_id\": \"<event_id>\", \"item_id\": \"item_a\", \"output_index\": 0, \"response_id\": \"resp_a\", \"type\": \"response.output_text.delta\"}\r\n",
+  "stderr": ""
+}

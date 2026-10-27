@@ -1,16 +1,40 @@
 {
-  "note": "被截断的终态。reason 必须落进 status_details.reason，客户端据此区分「说完了」和「被打断了」——两者都可能带 output，只有这个字段能区分。",
+  "note": "被截断的终态。reason 必须落进 status_details.reason，客户端据此区分「说完了」和「被截断」——两者都可能带 output，只有这个字段能区分。",
   "payload": {
     "event": "response.done",
     "args": {
       "response": {
-        "id": "resp_b",
         "object": "realtime.response",
-        "status": "incomplete",
+        "audio": {
+          "output": {
+            "voice": "zf_xiaobei"
+          }
+        },
+        "conversation_id": "conv_a",
+        "output_modalities": [
+          "audio"
+        ],
         "output": [],
+        "id": "resp_c",
+        "status": "incomplete",
         "status_details": {
           "type": "incomplete",
           "reason": "max_output_tokens"
+        },
+        "usage": {
+          "input_token_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0,
+            "image_tokens": 0,
+            "text_tokens": 2048
+          },
+          "input_tokens": 2048,
+          "output_token_details": {
+            "audio_tokens": 0,
+            "text_tokens": 4096
+          },
+          "output_tokens": 4096,
+          "total_tokens": 6144
         }
       }
     }

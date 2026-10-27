@@ -1,0 +1,6 @@
+{
+  "case": "output-text-delta-escaping",
+  "exit_code": 0,
+  "stdout": "{\"content_index\": 0, \"delta\": \"a\\\"b\\\\c\\nd\\te\\bf\\rg\\u0001h\\u001fij k\", \"event_id\": \"<event_id>\", \"item_id\": \"item_a\", \"output_index\": 0, \"response_id\": \"resp_a\", \"type\": \"response.output_text.delta\"}\r\n",
+  "stderr": ""
+}

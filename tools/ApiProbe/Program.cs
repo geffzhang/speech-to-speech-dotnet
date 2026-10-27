@@ -10,6 +10,7 @@ string[] targets = selfOnly
     [
         "SpeechToSpeech.Core",
         "SpeechToSpeech.Realtime",
+        "SpeechToSpeech.Backends.Lingua",
         "SpeechToSpeech.Backends.ManySpeech",
         "SpeechToSpeech.Backends.TensorSharp",
         "SpeechToSpeech.Backends.QwenTts",

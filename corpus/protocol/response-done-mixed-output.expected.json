@@ -1,0 +1,6 @@
+{
+  "case": "response-done-mixed-output",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"audio\": {\"output\": {}}, \"conversation_id\": \"conv_a\", \"id\": \"resp_a\", \"object\": \"realtime.response\", \"output\": [{\"content\": [{\"transcript\": \"我查一下天气。\", \"type\": \"output_audio\"}], \"id\": \"item_text\", \"object\": \"realtime.item\", \"role\": \"assistant\", \"status\": \"completed\", \"type\": \"message\"}, {\"arguments\": \"{\\\"city\\\":\\\"广州\\\"}\", \"call_id\": \"call_a\", \"id\": \"item_call\", \"name\": \"get_weather\", \"object\": \"realtime.item\", \"status\": \"completed\", \"type\": \"function_call\"}], \"output_modalities\": [\"audio\"], \"status\": \"completed\", \"status_details\": {\"type\": \"completed\"}, \"usage\": {\"input_token_details\": {\"audio_tokens\": 0, \"cached_tokens\": 0, \"image_tokens\": 0, \"text_tokens\": 12}, \"input_tokens\": 12, \"output_token_details\": {\"audio_tokens\": 0, \"text_tokens\": 8}, \"output_tokens\": 8, \"total_tokens\": 20}}, \"type\": \"response.done\"}\r\n",
+  "stderr": ""
+}

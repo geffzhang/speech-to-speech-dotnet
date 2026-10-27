@@ -1,0 +1,6 @@
+{
+  "case": "function-call-output-item-done",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"item\": {\"arguments\": \"{\\\"city\\\":\\\"广州\\\"}\", \"call_id\": \"call_a\", \"id\": \"item_b\", \"name\": \"get_weather\", \"object\": \"realtime.item\", \"status\": \"completed\", \"type\": \"function_call\"}, \"output_index\": 1, \"response_id\": \"resp_a\", \"type\": \"response.output_item.done\"}\r\n",
+  "stderr": ""
+}

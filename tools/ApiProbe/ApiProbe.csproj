@@ -14,6 +14,7 @@
   <ItemGroup Label="探测本实现公开表面时用">
     <ProjectReference Include="..\..\src\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
     <ProjectReference Include="..\..\src\SpeechToSpeech.Realtime\SpeechToSpeech.Realtime.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.Lingua\SpeechToSpeech.Backends.Lingua.csproj" />
     <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.ManySpeech\SpeechToSpeech.Backends.ManySpeech.csproj" />
     <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.TensorSharp\SpeechToSpeech.Backends.TensorSharp.csproj" />
     <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.QwenTts\SpeechToSpeech.Backends.QwenTts.csproj" />

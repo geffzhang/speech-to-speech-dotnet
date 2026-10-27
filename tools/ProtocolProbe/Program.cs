@@ -56,24 +56,86 @@ string? MaybeErrorText(string name) => fields["error"] is JsonObject e ? OptStr(
 // 平铺写法（response_id / status 直接放 args 顶层）留作兼容。
 JsonObject? ResponseObject() => fields["response"] as JsonObject;
 
-string RespText(string name)
-{
-    if (ResponseObject() is { } r)
-    {
-        return Track($"response.{name}", () => Str(r, name));
-    }
-
-    // 平铺兼容写法：response_id / status
-    var flat = name.EndsWith("_id", StringComparison.Ordinal) ? $"response_{name}" : name;
-    return Track(flat, () => Str(fields, flat));
-}
-
 // status_details 可能挂在 response 里（上游同形），也可能平铺
 JsonObject? StatusDetails() =>
     (ResponseObject()?["status_details"] as JsonObject) ?? (fields["status_details"] as JsonObject);
 
 string? DetailText(string name) => StatusDetails() is { } d ? OptStr(d, name) : null;
-string? DetailErrorText(string name) => StatusDetails()?["error"] is JsonObject e ? OptStr(e, name) : null;
+
+// response 载荷：上游入参是完整 response 对象，这里逐字段取出来喂给产品里的同一个 builder。
+// 取不到的字段留空——语料若漏了字段，基线（官方模型）会把该键整段省掉，比对会立刻暴露。
+IReadOnlyList<string> Modalities() => ResponseObject()?["output_modalities"] is JsonArray array
+    ? [.. array.Select(node => node?.GetValue<string>() ?? "").Where(s => s.Length > 0)]
+    : [];
+
+string? VoiceValue() => ResponseObject()?["audio"]?["output"] as JsonObject is { } output
+    ? OptStr(output, "voice")
+    : null;
+
+string? ConversationId() => ResponseObject() is { } r ? OptStr(r, "conversation_id") : null;
+
+ResponseUsage UsageCounts()
+{
+    if (ResponseObject()?["usage"] is not JsonObject usage)
+    {
+        return ResponseUsage.Empty;
+    }
+
+    return new ResponseUsage(
+        usage["input_tokens"]?.GetValue<int>() ?? 0,
+        usage["output_tokens"]?.GetValue<int>() ?? 0);
+}
+
+// output 数组里的每一项都重新由产品构造，而不是原样回显：
+// 回显只能证明「我抄得对」，重构造才能证明「我和上游造得一样」。
+IReadOnlyList<JsonObject> OutputItems()
+{
+    if (ResponseObject()?["output"] is not JsonArray array)
+    {
+        return [];
+    }
+
+    var items = new List<JsonObject>();
+    foreach (var node in array)
+    {
+        if (node is not JsonObject item)
+        {
+            continue;
+        }
+
+        if (item["type"]?.GetValue<string>() == "function_call")
+        {
+            items.Add(ServerEvent.FunctionCallItem(
+                Str(item, "id"),
+                Str(item, "call_id"),
+                Str(item, "name"),
+                item["arguments"]?.GetValue<string>() ?? "{}",
+                Str(item, "status")));
+            continue;
+        }
+
+        var part = item["content"] is JsonArray { Count: > 0 } content ? content[0] as JsonObject : null;
+        items.Add(ServerEvent.AssistantMessageItem(
+            Str(item, "id"),
+            Str(item, "status"),
+            part?["type"]?.GetValue<string>() == "output_audio",
+            part?["transcript"]?.GetValue<string>() ?? part?["text"]?.GetValue<string>() ?? ""));
+    }
+
+    return items;
+}
+
+ResponseSnapshot Snapshot() => new()
+{
+    Id = Track("response.id", () => ResponseObject() is { } r ? Str(r, "id") : Str(fields, "id")),
+    Status = Track("response.status", () => ResponseObject() is { } r ? Str(r, "status") : Str(fields, "status")),
+    Reason = DetailText("reason"),
+    Voice = VoiceValue(),
+    ConversationId = ConversationId(),
+    OutputModalities = Modalities(),
+    Output = OutputItems(),
+    Usage = UsageCounts(),
+};
 
 // transcription.completed 的 usage 只有 duration 一形态（上游不上报 token 口径）
 double UsageSeconds() => fields["usage"]?["seconds"]?.GetValue<double>() ?? 0;
@@ -94,6 +156,18 @@ string ItemId() => fields["item_id"] is { } node
 bool PartIsAudio() => fields["part"]?["type"]?.GetValue<string>() == "audio";
 bool ItemIsAudio() => fields["item"]?["content"] is JsonArray { Count: > 0 } content
     && content[0]?["type"]?.GetValue<string>() == "output_audio";
+
+// function_call 项整体重建（与 output 数组同一规则：重构造而不是回显）
+JsonObject FunctionCallItemFromInput() => Track("item", () =>
+{
+    var item = fields["item"] as JsonObject ?? throw new InvalidOperationException("item");
+    return ServerEvent.FunctionCallItem(
+        Str(item, "id"),
+        Str(item, "call_id"),
+        Str(item, "name"),
+        item["arguments"]?.GetValue<string>() ?? "{}",
+        Str(item, "status"));
+});
 
 // 音频模态下文本在 transcript，纯文本模态下在 text
 string PartText() => Track("part.transcript", () =>
@@ -148,10 +222,22 @@ JsonObject? payload = wire switch
 
     EventNames.ConversationItemDeleted => ServerEvent.ConversationItemDeleted(Text("item_id")),
 
-    EventNames.ResponseCreated => ServerEvent.ResponseCreated(Text("response_id")),
+    EventNames.ResponseCreated => ServerEvent.ResponseCreated(Snapshot()),
+
+    EventNames.OutputItemAdded when fields["item"]?["type"]?.GetValue<string>() == "function_call" =>
+        ServerEvent.FunctionCallOutputItemAdded(
+            Text("response_id"),
+            Str((JsonObject) fields["item"]!, "id"),
+            Number("output_index"),
+            Str((JsonObject) fields["item"]!, "call_id"),
+            Str((JsonObject) fields["item"]!, "name")),
 
     EventNames.OutputItemAdded => ServerEvent.OutputItemAdded(
         Text("response_id"), ItemId(), Number("output_index")),
+
+    EventNames.OutputItemDone when fields["item"]?["type"]?.GetValue<string>() == "function_call" =>
+        ServerEvent.FunctionCallOutputItemDone(
+            Text("response_id"), FunctionCallItemFromInput(), Number("output_index")),
 
     EventNames.OutputItemDone => ServerEvent.OutputItemDone(
         Text("response_id"),
@@ -177,29 +263,32 @@ JsonObject? payload = wire switch
         Number("output_index"), Number("content_index")),
 
     EventNames.OutputAudioDelta => ServerEvent.OutputAudioDelta(
-        Text("response_id"), Text("item_id"), Text("delta")),
+        Text("response_id"), Text("item_id"), Text("delta"), Number("output_index")),
 
     EventNames.OutputAudioDone => ServerEvent.OutputAudioDone(
-        Text("response_id"), Text("item_id")),
+        Text("response_id"), Text("item_id"), Number("output_index")),
 
     EventNames.OutputAudioTranscriptDelta => ServerEvent.OutputAudioTranscriptDelta(
-        Text("response_id"), Text("item_id"), Text("delta")),
+        Text("response_id"), Text("item_id"), Text("delta"), Number("output_index")),
 
     EventNames.OutputAudioTranscriptDone => ServerEvent.OutputAudioTranscriptDone(
-        Text("response_id"), Text("item_id"), Text("transcript")),
+        Text("response_id"), Text("item_id"), Text("transcript"), Number("output_index")),
 
     EventNames.FunctionCallArgumentsDone => ServerEvent.FunctionCallArgumentsDone(
-        Text("response_id"), Text("item_id"), Text("call_id"), Text("name"), Text("arguments")),
+        Text("response_id"), Text("item_id"), Text("call_id"), Text("name"), Text("arguments"),
+        Number("output_index")),
 
-    EventNames.ResponseDone => ServerEvent.ResponseDone(
-        RespText("id"),
-        RespText("status"),
-        DetailText("reason"),
-        DetailErrorText("message")),
+    EventNames.ResponseDone => ServerEvent.ResponseDone(Snapshot()),
 
-    // 上游发的是嵌套 error 对象；本实现工厂接受扁平参数，这里做展开
-    EventNames.Error => ServerEvent.Error(
-        ErrorText("code"), ErrorText("message"), MaybeErrorText("param")),
+    // 上游 error 有两条构造线（D027）：make_error 形状（error={message,type} 无 code，
+    // error.event_id 是 send_correlated 关联）走 TypeError 工厂；schema 校验形状
+    // （invalid_request_error + code + param）走 Error 工厂。按入参有无 code 分流。
+    EventNames.Error => MaybeErrorText("code") is { } code
+        ? ServerEvent.Error(code, ErrorText("message"), MaybeErrorText("param"))
+        : ServerEvent.TypeError(
+            Str(ErrorObject(fields), "type"),
+            ErrorText("message"),
+            MaybeErrorText("event_id")),
 
     _ => null,
 };

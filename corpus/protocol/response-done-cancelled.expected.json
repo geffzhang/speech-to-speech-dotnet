@@ -1,6 +1,6 @@
 {
   "case": "response-done-cancelled",
   "exit_code": 0,
-  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"id\": \"resp_a\", \"object\": \"realtime.response\", \"output\": [], \"status\": \"cancelled\", \"status_details\": {\"reason\": \"client_cancelled\", \"type\": \"cancelled\"}}, \"type\": \"response.done\"}\r\n",
+  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"audio\": {\"output\": {\"voice\": \"zf_xiaobei\"}}, \"conversation_id\": \"conv_a\", \"id\": \"resp_b\", \"object\": \"realtime.response\", \"output\": [{\"content\": [{\"transcript\": \"今天广州\", \"type\": \"output_audio\"}], \"id\": \"item_b\", \"object\": \"realtime.item\", \"role\": \"assistant\", \"status\": \"incomplete\", \"type\": \"message\"}], \"output_modalities\": [\"audio\"], \"status\": \"cancelled\", \"status_details\": {\"reason\": \"client_cancelled\", \"type\": \"cancelled\"}, \"usage\": {\"input_token_details\": {\"audio_tokens\": 0, \"cached_tokens\": 0, \"image_tokens\": 0, \"text_tokens\": 96}, \"input_tokens\": 96, \"output_token_details\": {\"audio_tokens\": 0, \"text_tokens\": 18}, \"output_tokens\": 18, \"total_tokens\": 114}}, \"type\": \"response.done\"}\r\n",
   "stderr": ""
 }

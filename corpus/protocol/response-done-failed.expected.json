@@ -1,6 +1,6 @@
 {
   "case": "response-done-failed",
   "exit_code": 0,
-  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"id\": \"resp_c\", \"object\": \"realtime.response\", \"output\": [], \"status\": \"failed\", \"status_details\": {\"error\": {\"code\": \"server_error\", \"message\": \"语音后端返回 500\"}, \"type\": \"failed\"}}, \"type\": \"response.done\"}\r\n",
+  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"audio\": {\"output\": {\"voice\": \"zf_xiaobei\"}}, \"conversation_id\": \"conv_a\", \"id\": \"resp_d\", \"object\": \"realtime.response\", \"output\": [], \"output_modalities\": [\"audio\"], \"status\": \"failed\", \"status_details\": {\"error\": {\"type\": \"response_failed\"}, \"type\": \"failed\"}, \"usage\": {\"input_token_details\": {\"audio_tokens\": 0, \"cached_tokens\": 0, \"image_tokens\": 0, \"text_tokens\": 64}, \"input_tokens\": 64, \"output_token_details\": {\"audio_tokens\": 0, \"text_tokens\": 0}, \"output_tokens\": 0, \"total_tokens\": 64}}, \"type\": \"response.done\"}\r\n",
   "stderr": ""
 }

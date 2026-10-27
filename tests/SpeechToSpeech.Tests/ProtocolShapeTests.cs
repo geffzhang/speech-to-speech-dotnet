@@ -14,21 +14,49 @@ namespace SpeechToSpeech.Tests;
 public sealed class ProtocolShapeTests
 {
     [Fact]
-    public void ResponseDone_CompletedHasNoStatusDetails()
+    public void Error_MakeErrorShapeCarriesTypeOnly()
     {
-        var payload = ServerEvent.ResponseDone("resp_1", "completed");
+        // 上游 make_error（build_error_event）形状：error 只有 message + type，无 code/param。
+        // 与 ServerEvent.Error 的 schema 校验路径（invalid_request_error + code）是两条线（D027）。
+        var payload = ServerEvent.TypeError("unknown_or_invalid_event", "Unknown or invalid event: foo");
+
+        Assert.Equal("error", payload["type"]!.GetValue<string>());
+        Assert.Equal("unknown_or_invalid_event", payload["error"]!["type"]!.GetValue<string>());
+        Assert.Equal("Unknown or invalid event: foo", payload["error"]!["message"]!.GetValue<string>());
+        Assert.Null(payload["error"]!["code"]);
+        Assert.Null(payload["error"]!["param"]);
+        Assert.NotNull(payload["event_id"]);
+    }
+
+    [Fact]
+    public void Error_MakeErrorShapeCarriesCorrelatedEventId()
+    {
+        // 上游 send_correlated 把客户端 event_id 写进 error.event_id（事件级 event_id 仍是服务端新生的）。
+        var payload = ServerEvent.TypeError(
+            "conversation_item_not_found", "No conversation item with id 'x' found.", "event_client_1");
+
+        Assert.Equal("event_client_1", payload["error"]!["event_id"]!.GetValue<string>());
+        Assert.NotEqual("event_client_1", payload["event_id"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ResponseDone_CompletedCarriesCompletedStatusDetails()
+    {        // 上游 _build_response 对任何终态都发 status_details，completed 也发，type 与 status 同名。
+        // 原先 completed 不发这段，客户端只能靠 status 字段反推「正常结束」——
+        // 而按判别器解析的实现会把它当成缺字段。
+        var payload = ServerEvent.ResponseDone(Snapshot("completed"));
 
         Assert.Equal("response.done", payload["type"]!.GetValue<string>());
         Assert.Equal("resp_1", payload["response"]!["id"]!.GetValue<string>());
         Assert.Equal("completed", payload["response"]!["status"]!.GetValue<string>());
-        Assert.Null(payload["response"]!["status_details"]);
+        Assert.Equal("completed", payload["response"]!["status_details"]!["type"]!.GetValue<string>());
         Assert.NotNull(payload["event_id"]);
     }
 
     [Fact]
     public void ResponseDone_IncompleteCarriesReason()
     {
-        var payload = ServerEvent.ResponseDone("resp_1", "incomplete", "max_output_tokens");
+        var payload = ServerEvent.ResponseDone(Snapshot("incomplete", "max_output_tokens"));
 
         Assert.Equal("incomplete", payload["response"]!["status"]!.GetValue<string>());
         var details = payload["response"]!["status_details"]!;
@@ -53,7 +81,7 @@ public sealed class ProtocolShapeTests
     {
         // 回归：status_details.type 曾恒写 "incomplete"，取消时会产出
         // 「type=incomplete + reason=client_cancelled」这种官方 schema 里不存在的组合
-        var payload = ServerEvent.ResponseDone("resp_1", "cancelled", "client_cancelled");
+        var payload = ServerEvent.ResponseDone(Snapshot("cancelled", "client_cancelled"));
 
         Assert.Equal("cancelled", payload["response"]!["status"]!.GetValue<string>());
         var details = payload["response"]!["status_details"]!;
@@ -62,14 +90,80 @@ public sealed class ProtocolShapeTests
     }
 
     [Fact]
-    public void ResponseDone_FailedCarriesErrorObject()
+    public void ResponseDone_FailedCarriesErrorTypeOnly()
     {
-        var payload = ServerEvent.ResponseDone("resp_1", "failed", errorMessage: "backend exploded");
+        // 上游只带 error.type（恒 "response_failed"）。失败详情走独立的 error 事件——
+        // 两处都写 message 时客户端只显示其中一处，另一处就永久沉默。
+        var payload = ServerEvent.ResponseDone(Snapshot("failed"));
 
         Assert.Equal("failed", payload["response"]!["status"]!.GetValue<string>());
         var details = payload["response"]!["status_details"]!;
         Assert.Equal("failed", details["type"]!.GetValue<string>());
-        Assert.Equal("backend exploded", details["error"]!["message"]!.GetValue<string>());
+        Assert.Equal("response_failed", details["error"]!["type"]!.GetValue<string>());
+        Assert.Null(details["error"]!["message"]);
+    }
+
+    [Fact]
+    public void Response_CarriesUsageModalitiesVoiceAndConversation()
+    {
+        // 这四项都是「客户端读得到但缺了不报错」的字段：缺 usage 时下游按 response 计费读到 0，
+        // 缺 conversation_id 时历史回放把每轮当成不同会话。所以只能靠断言守。
+        var response = ServerEvent.BuildResponse(Snapshot("completed"));
+
+        Assert.Equal("conv_1", response["conversation_id"]!.GetValue<string>());
+        Assert.Equal("zf_xiaobei", response["audio"]!["output"]!["voice"]!.GetValue<string>());
+        var modalities = response["output_modalities"]!.AsArray();
+        Assert.Single(modalities);
+        Assert.Equal("audio", modalities[0]!.GetValue<string>());
+
+        var usage = response["usage"]!;
+        Assert.Equal(12, usage["input_tokens"]!.GetValue<int>());
+        Assert.Equal(7, usage["output_tokens"]!.GetValue<int>());
+        Assert.Equal(19, usage["total_tokens"]!.GetValue<int>());
+        // audio_tokens / cached_tokens / image_tokens 在纯文本管线里恒 0：
+        // 字段要在（客户端按 schema 读），值恒 0（这几维没被支持）。
+        Assert.Equal(0, usage["input_token_details"]!["audio_tokens"]!.GetValue<int>());
+        Assert.Equal(12, usage["input_token_details"]!["text_tokens"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Response_NoVoiceMeansEmptyAudioOutput()
+    {
+        // 没配音色时上游发 {"output": {}}，不是省掉整个 audio 键——省键会让解析器
+        // 在解引用 audio.output.voice 时踩空。
+        var response = ServerEvent.BuildResponse(Snapshot("in_progress") with { Voice = null });
+
+        Assert.NotNull(response["audio"]!["output"]);
+        Assert.Null(response["audio"]!["output"]!["voice"]);
+    }
+
+    [Fact]
+    public void Response_CreatedAndDoneShareTheSameFieldSet()
+    {
+        // 客户端用 created 的载荷建立「当前响应」，再用 done 的替换它。
+        // 两次字段集不一致，严格解析器会在其中一次失败。唯一的合法差异是 status_details——
+        // 它只在终态出现（上游同样如此：in_progress 时不构造 status_details）。
+        var created = ServerEvent.ResponseCreated(Snapshot("in_progress"))["response"]!.AsObject();
+        var done = ServerEvent.ResponseDone(Snapshot("completed"))["response"]!.AsObject();
+
+        var createdKeys = created.Select(pair => pair.Key).Order().ToList();
+        var doneKeys = done.Select(pair => pair.Key).Order().ToList();
+
+        Assert.Equal(createdKeys.Concat(["status_details"]).Order(), doneKeys);
+    }
+
+    [Fact]
+    public void Response_TerminalOutputItemMatchesOutputItemDone()
+    {
+        // 终态 output 里的消息项与 output_item.done 里的那份必须逐字段相同：
+        // 客户端会把它们当同一条消息的两份快照。不一致时后到的 done 会把先渲染的内容盖掉。
+        var item = ServerEvent.AssistantMessageItem("item_1", "completed", wantsAudio: true, "你好");
+        var donePayload = ServerEvent.OutputItemDone("resp_1", "item_1", "你好");
+        var terminal = ServerEvent.BuildResponse(Snapshot("completed") with { Output = [item] });
+
+        Assert.Equal(
+            donePayload["item"]!.ToJsonString(),
+            terminal["output"]![0]!.ToJsonString());
     }
 
     [Fact]
@@ -119,7 +213,7 @@ public sealed class ProtocolShapeTests
             ServerEvent.TranscriptionFailed("item_1", "boom"),
             ServerEvent.ConversationItemCreated("item_1", "user"),
             ServerEvent.ConversationItemDeleted("item_1"),
-            ServerEvent.ResponseCreated("resp_1"),
+            ServerEvent.ResponseCreated(Snapshot("in_progress")),
             ServerEvent.OutputItemAdded("resp_1", "item_1", 0),
             ServerEvent.ContentPartAdded("resp_1", "item_1", 0, 0, wantsAudio: true),
             ServerEvent.OutputTextDelta("resp_1", "item_1", "hi"),
@@ -130,7 +224,7 @@ public sealed class ProtocolShapeTests
             ServerEvent.OutputAudioTranscriptDelta("resp_1", "item_1", "hi"),
             ServerEvent.OutputAudioTranscriptDone("resp_1", "item_1", "hi"),
             ServerEvent.FunctionCallArgumentsDone("resp_1", "item_1", "call_1", "search", "{}"),
-            ServerEvent.ResponseDone("resp_1", "completed"),
+            ServerEvent.ResponseDone(Snapshot("completed")),
         };
 
         foreach (var payload in events)
@@ -138,6 +232,19 @@ public sealed class ProtocolShapeTests
             Assert.True(payload.ContainsKey("event_id"), $"missing event_id on {payload["type"]}");
         }
     }
+
+    /// <summary>一份字段齐备的响应快照。默认值刻意取非空，缺字段的回归才会被断言抓到。</summary>
+    private static ResponseSnapshot Snapshot(string status, string? reason = null) => new()
+    {
+        Id = "resp_1",
+        Status = status,
+        Reason = reason,
+        Voice = "zf_xiaobei",
+        ConversationId = "conv_1",
+        OutputModalities = ["audio"],
+        Output = [],
+        Usage = new ResponseUsage(12, 7),
+    };
 }
 
 /// <summary>
@@ -215,6 +322,59 @@ public sealed class AssistantItemLifecycleTests
         var payload = ServerEvent.OutputItemDone("resp_1", "item_1", "我说到一半", completed: false);
 
         Assert.Equal("incomplete", payload["item"]!["status"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void FunctionCallOutputItemAdded_OpensWithEmptyArgumentsInProgress()
+    {
+        // added 阶段参数恒空、状态恒 in_progress：客户端先建立可关联的项，再等参数流。
+        var payload = ServerEvent.FunctionCallOutputItemAdded(
+            "resp_1", "item_call", 1, "call_a", "get_weather");
+
+        Assert.Equal("response.output_item.added", payload["type"]!.GetValue<string>());
+        Assert.Equal(1, payload["output_index"]!.GetValue<int>());
+        var item = payload["item"]!;
+        Assert.Equal("function_call", item["type"]!.GetValue<string>());
+        Assert.Equal("realtime.item", item["object"]!.GetValue<string>());
+        Assert.Equal("call_a", item["call_id"]!.GetValue<string>());
+        Assert.Equal("get_weather", item["name"]!.GetValue<string>());
+        Assert.Equal("", item["arguments"]!.GetValue<string>());
+        Assert.Equal("in_progress", item["status"]!.GetValue<string>());
+        Assert.Null(item["content"]);
+    }
+
+    [Fact]
+    public void FunctionCallOutputItemDone_ItemMatchesOutputSnapshot()
+    {
+        // done 的 item 与 response.output 里的终态项必须逐字段相同——
+        // 客户端把它们当同一条调用记录的两份快照，不一致时后到的 done 盖掉先渲染的内容。
+        var item = ServerEvent.FunctionCallItem(
+            "item_call", "call_a", "get_weather", "{\"city\":\"广州\"}", "completed");
+        var payload = ServerEvent.FunctionCallOutputItemDone("resp_1", item, 1);
+
+        Assert.Equal("response.output_item.done", payload["type"]!.GetValue<string>());
+        Assert.Equal(1, payload["output_index"]!.GetValue<int>());
+        Assert.Equal("{\"city\":\"广州\"}", payload["item"]!["arguments"]!.GetValue<string>());
+        Assert.Equal("completed", payload["item"]!["status"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ResponseOutput_MergeSortsMixedItemsByIndex()
+    {
+        // 消息项与函数调用项按 output_index 合并：客户端用 done 的 output[] 驱动函数执行，
+        // 顺序与流式事件的下标一致是协议承诺。
+        var message = ServerEvent.AssistantMessageItem("item_text", "completed", wantsAudio: true, "我查一下。");
+        var call = ServerEvent.FunctionCallItem("item_call", "call_a", "get_weather", "{}", "completed");
+
+        var merged = ResponseOutput.Merge(
+            messages: [(1, message)],
+            functionCalls: [(0, call)]);
+
+        Assert.Equal(2, merged.Count);
+        Assert.Equal("function_call", merged[0]["type"]!.GetValue<string>());
+        Assert.Equal("item_call", merged[0]["id"]!.GetValue<string>());
+        Assert.Equal("message", merged[1]["type"]!.GetValue<string>());
+        Assert.Equal("item_text", merged[1]["id"]!.GetValue<string>());
     }
 
     [Fact]

@@ -1,0 +1,6 @@
+{
+  "case": "response-done-out-of-band",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"audio\": {\"output\": {\"voice\": \"zf_xiaobei\"}}, \"id\": \"resp_a\", \"object\": \"realtime.response\", \"output\": [{\"content\": [{\"transcript\": \"广州今天晴，二十六度\", \"type\": \"output_audio\"}], \"id\": \"item_a\", \"object\": \"realtime.item\", \"role\": \"assistant\", \"status\": \"completed\", \"type\": \"message\"}], \"output_modalities\": [\"audio\"], \"status\": \"completed\", \"status_details\": {\"type\": \"completed\"}, \"usage\": {\"input_token_details\": {\"audio_tokens\": 0, \"cached_tokens\": 0, \"image_tokens\": 0, \"text_tokens\": 128}, \"input_tokens\": 128, \"output_token_details\": {\"audio_tokens\": 0, \"text_tokens\": 42}, \"output_tokens\": 42, \"total_tokens\": 170}}, \"type\": \"response.done\"}\r\n",
+  "stderr": ""
+}

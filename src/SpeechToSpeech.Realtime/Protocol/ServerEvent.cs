@@ -1,6 +1,6 @@
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using SpeechToSpeech.Core.Json;
 
 namespace SpeechToSpeech.Realtime.Protocol;
 
@@ -11,6 +11,7 @@ public static class EventNames
     public const string InputAudioBufferAppend = "input_audio_buffer.append";
     public const string InputAudioBufferCommit = "input_audio_buffer.commit";
     public const string InputAudioBufferClear = "input_audio_buffer.clear";
+    public const string OutputAudioBufferClear = "output_audio_buffer.clear";
     public const string SessionUpdate = "session.update";
     public const string ConversationItemCreate = "conversation.item.create";
     public const string ConversationItemDelete = "conversation.item.delete";
@@ -58,6 +59,8 @@ public static class ErrorCodes
     public const string ConversationAlreadyHasActiveResponse = "conversation_already_has_active_response";
     public const string SessionLimitReached = "session_limit_reached";
     public const string InvalidValue = "invalid_value";
+    public const string InvalidInputItem = "invalid_input_item";
+    public const string FunctionCallOutputPending = "function_call_output_pending";
     public const string ConversationItemNotFound = "conversation_item_not_found";
     public const string InternalError = "internal_error";
 }
@@ -69,15 +72,12 @@ public static class ErrorCodes
 /// </summary>
 public static class ServerEvent
 {
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        WriteIndented = false,
-        // 上游走 Starlette 的 send_json，它用 json.dumps(separators=(",", ":"), ensure_ascii=False)：
-        // 中文原样输出、base64 里的 '+' 不转义。默认的 JavaScriptEncoder 会把非 ASCII 转成
-        // \uXXXX（汉字 3 字节变 6 字节），并把 '+' 转成 \u002B——音频与转写都在热路径上，
-        // 这里必须与上游一致。Unsafe 指 HTML 内联风险，本协议不经 HTML，不适用。
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
+    /// <summary>
+    /// 线路序列化选项。编码器与探针共用 <see cref="WireJson"/>——上游走 Starlette 的
+    /// <c>send_json</c>（<c>ensure_ascii=False</c>），中文、base64 的 <c>+</c>、BMP 外的字符
+    /// 都原样输出；用默认编码器会逐字节偏掉（C012 / C017）。
+    /// </summary>
+    private static readonly JsonSerializerOptions Options = WireJson.Compact;
 
     public static JsonObject Create(string type) => new() { ["type"] = type };
 
@@ -94,6 +94,35 @@ public static class ServerEvent
         {
             error["param"] = param;
         }
+
+        if (eventId is not null)
+        {
+            error["event_id"] = eventId;
+        }
+
+        return new JsonObject
+        {
+            ["type"] = EventNames.Error,
+            ["event_id"] = NewEventId(),
+            ["error"] = error,
+        };
+    }
+
+    /// <summary>
+    /// 上游 <c>make_error</c> 形状的错误事件：<c>error.type</c> 直接放错误类型
+    /// （如 <c>invalid_input_item</c>），没有 <c>code</c> 字段。
+    ///
+    /// 与 <see cref="Error"/>（官方 schema 校验形状：<c>type=invalid_request_error</c>
+    /// + <c>code</c> + 可选 <c>param</c>）是两条不同的构造路径，上游就是两个形状，
+    /// 不能统一成一个工厂——D027 负责把剩余调用点按上游归位。
+    /// </summary>
+    public static JsonObject TypeError(string errorType, string message, string? eventId = null)
+    {
+        var error = new JsonObject
+        {
+            ["message"] = message,
+            ["type"] = errorType,
+        };
 
         if (eventId is not null)
         {
@@ -279,18 +308,119 @@ public static class ServerEvent
             },
         };
 
-    public static JsonObject ResponseCreated(string responseId)
+    /// <summary>
+    /// <c>response.created</c>。载荷与 <c>response.done</c> 同构，差别只在 status 与当时的 output。
+    ///
+    /// 客户端会拿这份载荷建立「当前响应」，之后再拿 done 的载荷替换它——两次字段集不一致，
+    /// 严格解析器会在其中一次失败。
+    /// </summary>
+    public static JsonObject ResponseCreated(ResponseSnapshot snapshot)
         => new()
         {
             ["type"] = EventNames.ResponseCreated,
             ["event_id"] = NewEventId(),
-            ["response"] = new JsonObject
-            {
-                ["id"] = responseId,
-                ["object"] = "realtime.response",
-                ["status"] = "in_progress",
-            },
+            ["response"] = BuildResponse(snapshot),
         };
+
+    /// <summary>
+    /// 组装 <c>response</c> 对象。上游 <c>_build_response</c> 的等价物，是这一层唯一的产地。
+    /// </summary>
+    public static JsonObject BuildResponse(ResponseSnapshot snapshot)
+    {
+        var response = new JsonObject
+        {
+            ["id"] = snapshot.Id,
+            ["object"] = "realtime.response",
+            ["status"] = snapshot.Status,
+        };
+
+        // 上游对任何终态都发 status_details，completed 也发（type 与 status 同名）。
+        // 漏掉这条时客户端拿不到「正常结束」的确认，只能靠 status 字段反推。
+        if (snapshot.Status != "in_progress")
+        {
+            var details = new JsonObject { ["type"] = snapshot.Status };
+            if (snapshot.Reason is not null)
+            {
+                details["reason"] = snapshot.Reason;
+            }
+
+            if (snapshot.Status == "failed")
+            {
+                // 上游只带 error.type（恒 "response_failed"）；失败详情走独立的 error 事件，
+                // 不塞进这里——两处都有 message 时客户端会挑一处显示，另一处就永久沉默。
+                details["error"] = new JsonObject { ["type"] = snapshot.ErrorType ?? "response_failed" };
+            }
+
+            response["status_details"] = details;
+        }
+
+        response["audio"] = new JsonObject
+        {
+            ["output"] = snapshot.Voice is null
+                ? new JsonObject()
+                : new JsonObject { ["voice"] = snapshot.Voice },
+        };
+
+        if (snapshot.ConversationId is not null)
+        {
+            response["conversation_id"] = snapshot.ConversationId;
+        }
+
+        if (snapshot.Metadata is not null)
+        {
+            // DeepClone：JsonNode 只能有一个父节点，直接挂会把调用方手里的对象偷走。
+            response["metadata"] = snapshot.Metadata.DeepClone();
+        }
+
+        response["output_modalities"] = new JsonArray(
+            [.. snapshot.OutputModalities.Select(m => (JsonNode) JsonValue.Create(m)!)]);
+        // DeepClone 而不是直接挂：JsonNode 只能有一个父节点，挂上去会把调用方手里的对象偷走。
+        response["output"] = new JsonArray([.. snapshot.Output.Select(item => (JsonNode) item.DeepClone())]);
+        response["usage"] = new JsonObject
+        {
+            ["input_token_details"] = new JsonObject
+            {
+                ["audio_tokens"] = 0,
+                ["cached_tokens"] = 0,
+                ["image_tokens"] = 0,
+                ["text_tokens"] = snapshot.Usage.InputTokens,
+            },
+            ["input_tokens"] = snapshot.Usage.InputTokens,
+            ["output_token_details"] = new JsonObject
+            {
+                ["audio_tokens"] = 0,
+                ["text_tokens"] = snapshot.Usage.OutputTokens,
+            },
+            ["output_tokens"] = snapshot.Usage.OutputTokens,
+            ["total_tokens"] = snapshot.Usage.InputTokens + snapshot.Usage.OutputTokens,
+        };
+
+        return response;
+    }
+
+    /// <summary>
+    /// 助手消息项。三处共用：<c>output_item.added</c>（content 为空）、
+    /// <c>output_item.done</c>、以及 <c>response.output</c> 数组里的同一项。
+    ///
+    /// 上游这三处都走 <c>_build_message_item</c>，因此终态消息项与 done 事件里的那份逐字段相同。
+    /// 分开写会让客户端拿到两个 id 相同、内容不同的 item。
+    /// </summary>
+    public static JsonObject AssistantMessageItem(string itemId, string status, bool wantsAudio, string text)
+    {
+        var content = wantsAudio
+            ? new JsonObject { ["type"] = "output_audio", ["transcript"] = text }
+            : new JsonObject { ["type"] = "output_text", ["text"] = text };
+
+        return new JsonObject
+        {
+            ["id"] = itemId,
+            ["object"] = "realtime.item",
+            ["type"] = "message",
+            ["role"] = "assistant",
+            ["status"] = status,
+            ["content"] = new JsonArray(content),
+        };
+    }
 
     // ── 助手消息项的生命周期 ──────────────────────────────────────────
     //
@@ -394,28 +524,15 @@ public static class ServerEvent
     /// </summary>
     public static JsonObject OutputItemDone(string responseId, string itemId, string text, int outputIndex = 0,
         bool wantsAudio = true, bool completed = true)
-    {
-        var content = wantsAudio
-            ? new JsonObject { ["type"] = "output_audio", ["transcript"] = text }
-            : new JsonObject { ["type"] = "output_text", ["text"] = text };
-
-        return new JsonObject
+        => new()
         {
             ["type"] = EventNames.OutputItemDone,
             ["event_id"] = NewEventId(),
             ["response_id"] = responseId,
             ["output_index"] = outputIndex,
-            ["item"] = new JsonObject
-            {
-                ["id"] = itemId,
-                ["object"] = "realtime.item",
-                ["type"] = "message",
-                ["role"] = "assistant",
-                ["status"] = completed ? "completed" : "incomplete",
-                ["content"] = new JsonArray(content),
-            },
+            // 与 response.output 里的终态项走同一个构造，保证两份逐字段相同。
+            ["item"] = AssistantMessageItem(itemId, completed ? "completed" : "incomplete", wantsAudio, text),
         };
-    }
 
     /// <summary>内容片骨架。音频模态用 <c>audio</c>/<c>transcript</c>，纯文本模态用 <c>text</c>。</summary>
     private static JsonObject EmptyPart(bool wantsAudio)
@@ -423,123 +540,123 @@ public static class ServerEvent
             ? new JsonObject { ["type"] = "audio", ["audio"] = "", ["transcript"] = "" }
             : new JsonObject { ["type"] = "text", ["text"] = "" };
 
-    public static JsonObject OutputAudioDelta(string responseId, string itemId, string audioBase64)
+    public static JsonObject OutputAudioDelta(string responseId, string itemId, string audioBase64,
+        int outputIndex = 0)
         => new()
         {
             ["type"] = EventNames.OutputAudioDelta,
             ["event_id"] = NewEventId(),
             ["response_id"] = responseId,
             ["item_id"] = itemId,
-            ["output_index"] = 0,
+            ["output_index"] = outputIndex,
             ["content_index"] = 0,
             ["delta"] = audioBase64,
         };
 
-    public static JsonObject OutputAudioDone(string responseId, string itemId)
+    public static JsonObject OutputAudioDone(string responseId, string itemId, int outputIndex = 0)
         => new()
         {
             ["type"] = EventNames.OutputAudioDone,
             ["event_id"] = NewEventId(),
             ["response_id"] = responseId,
             ["item_id"] = itemId,
-            ["output_index"] = 0,
+            ["output_index"] = outputIndex,
             ["content_index"] = 0,
         };
 
-    public static JsonObject OutputAudioTranscriptDelta(string responseId, string itemId, string delta)
+    public static JsonObject OutputAudioTranscriptDelta(string responseId, string itemId, string delta,
+        int outputIndex = 0)
         => new()
         {
             ["type"] = EventNames.OutputAudioTranscriptDelta,
             ["event_id"] = NewEventId(),
             ["response_id"] = responseId,
             ["item_id"] = itemId,
-            ["output_index"] = 0,
+            ["output_index"] = outputIndex,
             ["content_index"] = 0,
             ["delta"] = delta,
         };
 
-    public static JsonObject OutputAudioTranscriptDone(string responseId, string itemId, string transcript)
+    public static JsonObject OutputAudioTranscriptDone(string responseId, string itemId, string transcript,
+        int outputIndex = 0)
         => new()
         {
             ["type"] = EventNames.OutputAudioTranscriptDone,
             ["event_id"] = NewEventId(),
             ["response_id"] = responseId,
             ["item_id"] = itemId,
-            ["output_index"] = 0,
+            ["output_index"] = outputIndex,
             ["content_index"] = 0,
             ["transcript"] = transcript,
         };
 
+    /// <summary>
+    /// 函数调用项。三处共用：<c>output_item.added</c>（arguments 空格、in_progress）、
+    /// <c>output_item.done</c>、以及 <c>response.output</c> 数组里的同一项——
+    /// 上游同一个 <c>RealtimeConversationItemFunctionCall</c> 实例三处复用，逐字段相同。
+    /// </summary>
+    public static JsonObject FunctionCallItem(string itemId, string callId, string name, string arguments,
+        string status)
+        => new()
+        {
+            ["id"] = itemId,
+            ["object"] = "realtime.item",
+            ["type"] = "function_call",
+            ["call_id"] = callId,
+            ["name"] = name,
+            ["arguments"] = arguments,
+            ["status"] = status,
+        };
+
+    /// <summary><c>response.output_item.added</c>：函数调用项登场，arguments 为空、状态 in_progress。</summary>
+    public static JsonObject FunctionCallOutputItemAdded(string responseId, string itemId, int outputIndex,
+        string callId, string name)
+        => new()
+        {
+            ["type"] = EventNames.OutputItemAdded,
+            ["event_id"] = NewEventId(),
+            ["response_id"] = responseId,
+            ["output_index"] = outputIndex,
+            ["item"] = FunctionCallItem(itemId, callId, name, arguments: "", status: "in_progress"),
+        };
+
+    /// <summary><c>response.output_item.done</c>：函数调用项收口，item 与 <c>response.output</c> 同源。</summary>
+    public static JsonObject FunctionCallOutputItemDone(string responseId, JsonObject item, int outputIndex)
+        => new()
+        {
+            ["type"] = EventNames.OutputItemDone,
+            ["event_id"] = NewEventId(),
+            ["response_id"] = responseId,
+            ["output_index"] = outputIndex,
+            ["item"] = item.DeepClone(),
+        };
+
+    /// <summary><c>response.function_call_arguments.done</c>：完整参数到位，与 added 同 item_id 便于关联。</summary>
     public static JsonObject FunctionCallArgumentsDone(string responseId, string itemId, string callId, string name,
-        string arguments)
+        string arguments, int outputIndex = 0)
         => new()
         {
             ["type"] = EventNames.FunctionCallArgumentsDone,
             ["event_id"] = NewEventId(),
             ["response_id"] = responseId,
             ["item_id"] = itemId,
-            ["output_index"] = 0,
+            ["output_index"] = outputIndex,
             ["call_id"] = callId,
             ["name"] = name,
             ["arguments"] = arguments,
         };
 
     /// <summary>
-    /// <c>response.done</c>。
-    ///
-    /// 终态判定顺序有意为之：错误优先于"不完整"，"不完整"优先于 completed——
-    /// 客户端据此决定是否回滚历史，顺序错了会留下半截对话。
+    /// <c>response.done</c>。载荷与 <c>response.created</c> 同构（同一个 <see cref="BuildResponse"/>），
+    /// 差别只在 status 与那一刻的 output。
     /// </summary>
-    public static JsonObject ResponseDone(
-        string responseId,
-        string status,
-        string? reason = null,
-        string? errorMessage = null)
-    {
-        var response = new JsonObject
-        {
-            ["id"] = responseId,
-            ["object"] = "realtime.response",
-            ["status"] = status,
-            ["output"] = new JsonArray(),
-        };
-
-        // status_details.type 与 status 同域（completed / cancelled / incomplete / failed）。
-        // 原先恒写 "incomplete"，于是取消时会产出「type=incomplete + reason=client_cancelled」——
-        // 官方 schema 里不存在这个组合，严格客户端解析会失败。
-        if (status is "incomplete" or "cancelled" or "failed")
-        {
-            var details = new JsonObject { ["type"] = status };
-            if (reason is not null)
-            {
-                details["reason"] = reason;
-            }
-
-            response["status_details"] = details;
-        }
-
-        var envelope = new JsonObject
+    public static JsonObject ResponseDone(ResponseSnapshot snapshot)
+        => new()
         {
             ["type"] = EventNames.ResponseDone,
             ["event_id"] = NewEventId(),
-            ["response"] = response,
+            ["response"] = BuildResponse(snapshot),
         };
-
-        if (errorMessage is not null)
-        {
-            response["status_details"] = new JsonObject
-            {
-                ["type"] = "failed",
-                ["error"] = new JsonObject
-                {
-                    ["code"] = "server_error",
-                    ["message"] = errorMessage,
-                },
-            };
-        }
-
-        return envelope;
-    }
 
     public static string Serialize(JsonObject payload) => payload.ToJsonString(Options);
 

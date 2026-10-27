@@ -1,0 +1,13 @@
+{
+  "note": "BMP 之外的字符（emoji）必须原样输出，不能写成代理对转义 \\uD83D\\uDE00。上游 json.dumps(ensure_ascii=False) 原样发；本实现原先用 UnsafeRelaxedJsonEscaping，它仍会转义代理对，每个 emoji 从 4 字节膨胀到 12 字节，且部分客户端按代理对渲染会把表情拆成两个乱码字符。",
+  "payload": {
+    "event": "response.output_text.delta",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_a",
+      "output_index": 0,
+      "content_index": 0,
+      "delta": "搞定 😀👍 还有 🎉 和 🇨🇳"
+    }
+  }
+}

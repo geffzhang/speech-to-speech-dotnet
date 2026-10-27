@@ -1,0 +1,19 @@
+{
+  "note": "函数调用项收口：item 与 response.output 里的终态项逐字段同源（status=completed、arguments 完整）。客户端靠 added/done 的同 item_id 把流式参数与终态项关联。",
+  "payload": {
+    "event": "response.output_item.done",
+    "args": {
+      "response_id": "resp_a",
+      "output_index": 1,
+      "item": {
+        "id": "item_b",
+        "object": "realtime.item",
+        "type": "function_call",
+        "call_id": "call_a",
+        "name": "get_weather",
+        "arguments": "{\"city\":\"广州\"}",
+        "status": "completed"
+      }
+    }
+  }
+}

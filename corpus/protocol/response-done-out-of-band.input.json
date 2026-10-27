@@ -1,0 +1,54 @@
+{
+  "note": "带外响应（response.create 的 conversation=\"none\"）的终态。上游 is_out_of_band 时 conversation_id 报 null——官方模型 exclude_none 会把整个键剔掉，线路上一律没有这个键。本实现的 SnapshotOf 对带外响应置 null、BuildResponse 对 null 省键，两侧同形。其余字段（status_details、usage、output）与带内终态完全一致：带外只是不接进会话，不是降级的事件形状。",
+  "payload": {
+    "event": "response.done",
+    "args": {
+      "response": {
+        "object": "realtime.response",
+        "audio": {
+          "output": {
+            "voice": "zf_xiaobei"
+          }
+        },
+        "output_modalities": [
+          "audio"
+        ],
+        "output": [
+          {
+            "id": "item_a",
+            "object": "realtime.item",
+            "type": "message",
+            "role": "assistant",
+            "status": "completed",
+            "content": [
+              {
+                "type": "output_audio",
+                "transcript": "广州今天晴，二十六度"
+              }
+            ]
+          }
+        ],
+        "id": "resp_a",
+        "status": "completed",
+        "status_details": {
+          "type": "completed"
+        },
+        "usage": {
+          "input_token_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0,
+            "image_tokens": 0,
+            "text_tokens": 128
+          },
+          "input_tokens": 128,
+          "output_token_details": {
+            "audio_tokens": 0,
+            "text_tokens": 42
+          },
+          "output_tokens": 42,
+          "total_tokens": 170
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "case": "response-created",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"response\": {\"audio\": {\"output\": {\"voice\": \"zf_xiaobei\"}}, \"conversation_id\": \"conv_a\", \"id\": \"resp_a\", \"object\": \"realtime.response\", \"output\": [], \"output_modalities\": [\"audio\"], \"status\": \"in_progress\", \"usage\": {\"input_token_details\": {\"audio_tokens\": 0, \"cached_tokens\": 0, \"image_tokens\": 0, \"text_tokens\": 0}, \"input_tokens\": 0, \"output_token_details\": {\"audio_tokens\": 0, \"text_tokens\": 0}, \"output_tokens\": 0, \"total_tokens\": 0}}, \"type\": \"response.created\"}\r\n",
+  "stderr": ""
+}

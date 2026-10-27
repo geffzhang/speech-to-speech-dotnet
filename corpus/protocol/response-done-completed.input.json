@@ -1,0 +1,55 @@
+{
+  "note": "正常结束的终态。三点必守：status_details 也发（type=completed，不是只有异常才发）；output 里带已生成的消息项，且与 output_item.done 的那份相同；usage 是本轮真实用量。",
+  "payload": {
+    "event": "response.done",
+    "args": {
+      "response": {
+        "object": "realtime.response",
+        "audio": {
+          "output": {
+            "voice": "zf_xiaobei"
+          }
+        },
+        "conversation_id": "conv_a",
+        "output_modalities": [
+          "audio"
+        ],
+        "output": [
+          {
+            "id": "item_a",
+            "object": "realtime.item",
+            "type": "message",
+            "role": "assistant",
+            "status": "completed",
+            "content": [
+              {
+                "type": "output_audio",
+                "transcript": "今天广州晴，二十六度"
+              }
+            ]
+          }
+        ],
+        "id": "resp_a",
+        "status": "completed",
+        "status_details": {
+          "type": "completed"
+        },
+        "usage": {
+          "input_token_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0,
+            "image_tokens": 0,
+            "text_tokens": 128
+          },
+          "input_tokens": 128,
+          "output_token_details": {
+            "audio_tokens": 0,
+            "text_tokens": 42
+          },
+          "output_tokens": 42,
+          "total_tokens": 170
+        }
+      }
+    }
+  }
+}

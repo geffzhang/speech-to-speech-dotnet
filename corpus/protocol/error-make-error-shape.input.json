@@ -1,0 +1,13 @@
+{
+  "note": "上游 make_error（build_error_event）形状：error 只有 message + type 两个字段，无 code/param。与 schema 校验路径（invalid_request_error + code + param）是两条不同的构造线。产品里 TypeError 工厂输出此形状；error.event_id 是 send_correlated 的关联字段，客户端给了 event_id 才有。",
+  "payload": {
+    "event": "error",
+    "args": {
+      "error": {
+        "type": "unknown_or_invalid_event",
+        "message": "Unknown or invalid event: foo",
+        "event_id": "event_client_1"
+      }
+    }
+  }
+}

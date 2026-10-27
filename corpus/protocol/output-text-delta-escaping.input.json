@@ -1,0 +1,13 @@
+{
+  "note": "转义规则必须与 Python 的 json.dumps 一致：只转 \" 与 \\，加上 0x00–0x1F（\\b \\f \\n \\r \\t 用短转义，其余 \\u00xx 小写）。DEL(0x7F) 与 NO-BREAK SPACE(0xA0) 上游不转义——多转一个就多一次字节差异，而这类字符在转写里真实存在（复制粘贴、OCR）。",
+  "payload": {
+    "event": "response.output_text.delta",
+    "args": {
+      "response_id": "resp_a",
+      "item_id": "item_a",
+      "output_index": 0,
+      "content_index": 0,
+      "delta": "a\"b\\c\nd\te\bf\rg\u0001h\u001fi\u007fj\u00a0k"
+    }
+  }
+}

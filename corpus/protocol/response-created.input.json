@@ -1,0 +1,38 @@
+{
+  "note": "响应开始。载荷与 response.done 同构（上游 _build_response 同一个 builder），只有 status 和当时的 output 不同：此时 output 必须为空数组、usage 全 0。客户端拿它建立「当前响应」，字段缺失时要到 done 才补——中间任何按字段取值的地方都会踩空。",
+  "payload": {
+    "event": "response.created",
+    "args": {
+      "response": {
+        "object": "realtime.response",
+        "audio": {
+          "output": {
+            "voice": "zf_xiaobei"
+          }
+        },
+        "conversation_id": "conv_a",
+        "output_modalities": [
+          "audio"
+        ],
+        "output": [],
+        "id": "resp_a",
+        "status": "in_progress",
+        "usage": {
+          "input_token_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0,
+            "image_tokens": 0,
+            "text_tokens": 0
+          },
+          "input_tokens": 0,
+          "output_token_details": {
+            "audio_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "total_tokens": 0
+        }
+      }
+    }
+  }
+}

@@ -1,19 +1,42 @@
 {
-  "note": "后端失败的终态。失败不是用顶层 error 事件表达的，而是把错误塞进 status_details.error，且必须带 code——只给 message 的客户端无法区分「可重试」和「不可重试」。",
+  "note": "后端失败的终态。status_details.error 只带 type（上游恒 response_failed）；失败详情走独立的 error 事件，不塞进这里——两处都写 message 时客户端只显示其中一处，另一处永久沉默。",
   "payload": {
     "event": "response.done",
     "args": {
       "response": {
-        "id": "resp_c",
         "object": "realtime.response",
-        "status": "failed",
+        "audio": {
+          "output": {
+            "voice": "zf_xiaobei"
+          }
+        },
+        "conversation_id": "conv_a",
+        "output_modalities": [
+          "audio"
+        ],
         "output": [],
+        "id": "resp_d",
+        "status": "failed",
         "status_details": {
           "type": "failed",
           "error": {
-            "code": "server_error",
-            "message": "语音后端返回 500"
+            "type": "response_failed"
           }
+        },
+        "usage": {
+          "input_token_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0,
+            "image_tokens": 0,
+            "text_tokens": 64
+          },
+          "input_tokens": 64,
+          "output_token_details": {
+            "audio_tokens": 0,
+            "text_tokens": 0
+          },
+          "output_tokens": 0,
+          "total_tokens": 64
         }
       }
     }

@@ -3,6 +3,9 @@
   <PropertyGroup>
     <RootNamespace>SpeechToSpeech.Core</RootNamespace>
     <Description>管线运行时、消息契约、配置与后端注册表。</Description>
+    <!-- 只为 Json/RelaxedJsonEncoder：自定义 JavaScriptEncoder 的抽象方法签名带 char*，
+         没有非 unsafe 的替代。除此之外 Core 里不应出现 unsafe。 -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
