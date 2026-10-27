@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>SpeechToSpeech.Backends.PyannoteDiarization</RootNamespace>
+    <Description>pyannote segmentation-3.0 的帧级 speaker mask 引擎（ONNX Runtime）：保留 powerset 掩码，供流式说话人分离驱动。</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SpeechToSpeech.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SpeechToSpeech.Audio.Diarization\SpeechToSpeech.Audio.Diarization.csproj" />
+    <ProjectReference Include="..\SpeechToSpeech.Core\SpeechToSpeech.Core.csproj" />
+  </ItemGroup>
+
+</Project>
