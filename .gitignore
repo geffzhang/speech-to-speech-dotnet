@@ -402,3 +402,6 @@ FodyWeavers.xsd
 
 # 本地大文件：llama.cpp 发行包与模型权重（552MB，不入库）
 tools/llamacpp/
+
+# 冒烟脚本运行时产物
+tools/smoke/serve.pid
