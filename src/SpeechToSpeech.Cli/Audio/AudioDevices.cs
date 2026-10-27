@@ -8,13 +8,12 @@ namespace SpeechToSpeech.Cli.Audio;
 /// 音频设备工厂。把「哪套系统 API」关在这一个文件里，<see cref="AudioClient"/> 只认
 /// <see cref="IWaveIn"/> / <see cref="IWavePlayer"/> 两个抽象。
 ///
-/// 三个平台对应三个后端，均来自 NAudio 3.x：
+/// 三个平台对应三个后端：
 /// <list type="bullet">
 /// <item>Windows —— WASAPI 播放（<c>WasapiPlayer</c>，可控延迟）+ WinMM 录制（<c>WaveIn</c>）；</item>
 /// <item>Linux —— ALSA（<c>AlsaIn</c> / <c>AlsaOut</c>），需 <c>libasound.so.2</c> 运行库；</item>
-/// <item>macOS —— 未接入。<c>NAudio.MacOS</c> 目前只有预发布包（3.3.0-preview.34），
-/// 官方 README 明写 "still in pre-release phase and breaking code changes may be performed"，
-/// 不纳入默认构建。见差异账 E-01。</item>
+/// <item>macOS —— PortAudio（<see cref="PortAudioAudioDevices"/>，PortAudioSharp2 1.0.6 正式版）。
+/// 上游 <c>sounddevice</c> 底层就是 PortAudio，macOS 路径与上游同引擎；见差异账 E001。</item>
 /// </list>
 ///
 /// 注意录制侧为什么不用 <c>WasapiRecorder</c>：它虽然更现代，但**没有实现 <see cref="IWaveIn"/>**
@@ -36,9 +35,14 @@ internal static class AudioDevices
             return new AlsaAudioDevices();
         }
 
+        if (OperatingSystem.IsMacOS())
+        {
+            return new PortAudioAudioDevices();
+        }
+
         throw new PlatformNotSupportedException(
-            "音频设备 I/O 目前只支持 Windows 与 Linux。macOS 需要 NAudio.MacOS，" +
-            "该包仍处预发布阶段（3.3.0-preview.34），未纳入默认构建。");
+            "音频设备 I/O 支持 Windows、Linux 与 macOS。" +
+            "macOS 走 PortAudio（PortAudioSharp2），需要对应 RID 的原生库随应用发布。");
     }
 }
 
