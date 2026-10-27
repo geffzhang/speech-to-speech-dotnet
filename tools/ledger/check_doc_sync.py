@@ -18,6 +18,9 @@
 
 不检查 02-differences.md：它是 diff_register.py render 生成的，问题描述列写的
 本来就是缺陷原貌（「仅 WebSocket 传输，无 WebRTC」配状态列「已解决」是正常形态）。
+
+除了 porting/ 四本账，还扫仓库里各子目录的 README：第一次只扫 porting/ 时，
+`corpus/protocol/README.md` 里的「事件级覆盖 25/26」就漏掉了（实际早已 26/26）。
 """
 
 from __future__ import annotations
@@ -68,11 +71,10 @@ def check_line(text: str, status: str) -> str | None:
     return None
 
 
-def scan(doc_dir: Path, rows: dict[str, str]) -> list[tuple[str, int, str, str, str, str]]:
+def scan_files(paths, rows: dict[str, str], root: Path) -> list[tuple[str, int, str, str, str, str]]:
     problems = []
-    for path in sorted(doc_dir.glob("*.md")):
-        if path.name in SKIP_FILES:
-            continue
+    for path in paths:
+        label = path.name if path.parent == root / "porting" else str(path.relative_to(root)).replace("\\", "/")
         for lineno, text in enumerate(
             io.open(path, encoding="utf-8").read().splitlines(), 1
         ):
@@ -84,8 +86,16 @@ def scan(doc_dir: Path, rows: dict[str, str]) -> list[tuple[str, int, str, str, 
                     continue
                 kind = check_line(text, status)
                 if kind:
-                    problems.append((path.name, lineno, tid, status, kind, text.strip()))
+                    problems.append((label, lineno, tid, status, kind, text.strip()))
     return problems
+
+
+def scan(doc_dir: Path, rows: dict[str, str], extras=()) -> list[tuple[str, int, str, str, str, str]]:
+    root = doc_dir.parent
+    paths = [p for p in sorted(doc_dir.glob("*.md")) if p.name not in SKIP_FILES]
+    for pattern in extras:
+        paths.extend(p for p in sorted(root.glob(pattern)) if p not in paths)
+    return scan_files(paths, rows, root)
 
 
 def main() -> int:
@@ -94,6 +104,12 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description="账本状态与文档措辞一致性检查")
     parser.add_argument("--dir", default="porting", help="台账目录（默认 porting）")
+    parser.add_argument(
+        "--extra",
+        nargs="*",
+        default=["README.md", "corpus/*/README.md", "tools/*/README.md", "src/*/README.md"],
+        help="额外扫描的文档，按台账目录的上级（仓库根）做 glob",
+    )
     parser.add_argument("--strict", action="store_true", help="发现问题即返回非零退出码")
     parser.add_argument("--verbose", action="store_true", help="打印命中行全文")
     args = parser.parse_args()
@@ -105,7 +121,7 @@ def main() -> int:
         return 2
 
     rows = load_status(diff_path)
-    problems = scan(doc_dir, rows)
+    problems = scan(doc_dir, rows, args.extra)
 
     if not problems:
         print(f"文档措辞与账本状态一致（{len(rows)} 条差异）。")
