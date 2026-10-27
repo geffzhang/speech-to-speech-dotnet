@@ -1,0 +1,6 @@
+{
+  "case": "session-created",
+  "exit_code": 0,
+  "stdout": "{\"event_id\": \"<event_id>\", \"session\": {\"id\": \"session_00000000000000000000000000000001\", \"instructions\": \"hi\", \"type\": \"realtime\"}, \"type\": \"session.created\"}\r\n",
+  "stderr": ""
+}

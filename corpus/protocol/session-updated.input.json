@@ -1,0 +1,13 @@
+{
+  "note": "session.update 之后的重发。会话 id 必须还是同一个值——客户端若在 update 之后重读 id，拿到的不能是空、也不能是它自己塞进去的东西（上游同样用 model_copy 覆盖，C029）。",
+  "payload": {
+    "event": "session.updated",
+    "args": {
+      "session": {
+        "type": "realtime",
+        "instructions": "hi",
+        "id": "session_00000000000000000000000000000001"
+      }
+    }
+  }
+}

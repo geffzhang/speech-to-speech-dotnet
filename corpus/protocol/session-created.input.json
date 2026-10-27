@@ -1,0 +1,13 @@
+{
+  "note": "握手后的第一条事件。session.id 必须存在且与 Location 头同值——客户端据此把后续事件对应到连接。上游用 model_copy(update={\"id\": conn_id}) 把 id 覆盖进 session 对象再 dump；本实现曾经整个字段都不发（C029）。",
+  "payload": {
+    "event": "session.created",
+    "args": {
+      "session": {
+        "type": "realtime",
+        "instructions": "hi",
+        "id": "session_00000000000000000000000000000001"
+      }
+    }
+  }
+}

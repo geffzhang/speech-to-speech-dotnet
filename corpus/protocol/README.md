@@ -43,7 +43,9 @@ python <skill>/scripts/diff_corpus.py verify --corpus corpus/protocol --json-can
   --cmd "dotnet tools/ProtocolProbe/bin/Debug/net10.0/ProtocolProbe.dll"
 ```
 
-## 41 条覆盖什么
+## 43 条覆盖什么
+
+**会话握手（2 条）**：`session.created` / `session.updated`，守的是 `session.id` 这一格——上游用 `model_copy(update={"id": conn_id})` 把会话 id 覆盖进 session 对象再 dump，客户端据此把后续事件对应到连接。这两条是 C029 收口时补的：在此之前语料里根本没有 `session.created` 样例，而本实现偏偏就没发这个字段，「基线绿」从来没被检验过。新增时同步给 `tools/ProtocolProbe` 加了两个分支。
 
 **输入侧（转写链路）**：`speech_started` / `speech_stopped` / `committed` / `item.created` / `transcription.delta` / `transcription.completed` / `transcription.failed` / `item.deleted` / `error`。
 
@@ -74,7 +76,7 @@ python <skill>/scripts/diff_corpus.py verify --corpus corpus/protocol --json-can
 缺口由两个可复跑的审计承担：
 
 ```bash
-# 事件级覆盖：上游 26 种 vs 本实现的构造路径（当前 25/26）
+# 事件级覆盖：上游 26 种 vs 本实现的构造路径（当前 26/26）
 python tools/refprobe/protocol_coverage.py
 
 # 官方 schema：46 种事件的必填字段清单，可作为字段级的比对基准

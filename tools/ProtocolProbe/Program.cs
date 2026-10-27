@@ -194,8 +194,23 @@ JsonArray? ContentArray()
     return fields["item"]?["content"] is JsonArray nested ? (JsonArray)nested.DeepClone() : null;
 }
 
+// 会话事件：会话 id 在 session 对象里，与上游 model_copy(update={"id": conn_id}) 同形。
+// 取入参里的 id 而不是自己造——这一格守的是「id 有没有被写进 session 对象」，
+// 值本身由调用方给固定字面量（C029）。
+JsonObject SessionEvent(bool created)
+{
+    var session = fields["session"] as JsonObject ?? throw new InvalidOperationException("session");
+    var id = Str(session, "id");
+    return created
+        ? ServerEvent.SessionCreated(id, session)
+        : ServerEvent.SessionUpdated(id, session);
+}
+
 JsonObject? payload = wire switch
 {
+    EventNames.SessionCreated => SessionEvent(created: true),
+    EventNames.SessionUpdated => SessionEvent(created: false),
+
     EventNames.SpeechStarted => ServerEvent.SpeechStarted(Text("item_id"), Number("audio_start_ms")),
     EventNames.SpeechStopped => ServerEvent.SpeechStopped(Text("item_id"), Number("audio_end_ms")),
 
