@@ -208,7 +208,20 @@ dotnet run
 - **协议面**：事件名与字段集同 OpenAI Realtime，但**字段集与必填约束有取舍**（以 `porting/differences.jsonl` 为准；`previous_item_id` 已对齐——键始终存在，首个项为 `null`）。
 - **无鉴权 / 无 `/sessions` 临时令牌**。
 - **「语义接缝」差异**以 `porting/differences.jsonl` 为准（`02-differences.md` 是渲染产物）。关键差异编号：`D035`（`talk`/`local` 客户端参数族）、`D008`（ManySpeech 本地 STT 无增量转写，流式实时转写走 `openai-realtime`/`vllm-realtime` 后端）、`D036`（STT 参数命名模板）、`E003`（缺模型运行期报错）。
-- **转写后端二选一**：默认 ManySpeech 离线整段（`completed` 事件）；选 `--stt openai-realtime` / `vllm-realtime` 才收 `transcription.delta` 增量（需外部端点，见 `docs/vllm-realtime-d005-integration.md`）。
+- **转写后端**：默认 `whisper`（本地 ManySpeech 离线整段）。`--stt` 的可选值分三类，行为差异在**是否流式**：
+
+  | 后端 | `--stt` 值 | 采样率 | 行为 | 外部依赖 |
+  |---|---|---|---|---|
+  | ManySpeech 离线 | `whisper`（**默认**）/ `paraformer` / `sense-voice` | 16000 | 每个 VAD 段**结束**才发 `conversation.item.input_audio_transcription.completed`，**无** `transcription.delta` | 本地模型目录 |
+  | OpenAI hosted 离线 | `openai` | 16000 | 同前，走 `/audio/transcriptions` 整段识别 | `openai_api_key` / `openai_base_url` |
+  | 流式实时 | `openai-realtime` / `vllm-realtime` | 24k / 16k | 说话中**逐段**发 `transcription.delta`，最终 `completed` | 需外部端点（见 `docs/vllm-realtime-d005-integration.md`） |
+
+  - **`transcription.delta` 不需要客户端订阅**：流式后端在说话过程中就会推送，与 `session.update` 的 `extensions` 无关。
+  - **`transcription.snapshot`（`speech_to_speech.input_audio_transcription.snapshot`）是另一条通道**：需客户端在 `session.update` 里通过 `extensions` 订阅（缺省关闭）才发。两者别混淆——snapshot 是「已提交片段的一句话快照」，delta 是「边说边出的增量」。
+  - **参数命名**：`{sttBackend}_model_dir` / `_{language}` / `_base_url` / `_api_key` / `_{sample_rate}` / `_{connect_timeout}` / `_{final_timeout}`，另有短别名 `stt_model_dir`、`stt_language`、`base_url`、`api_key`（D036：上游带 `_stt_` 段，本实现统一 `{backend}_*` 模板）。
+  - **默认值**：流式后端 `connect_timeout` 10s、`final_timeout` 60s；`openai-realtime` 采样率 24k（需重采样上行）、`vllm-realtime` 16k（与管线一致直通）。
+  - **怎么选**：要「边说边逐字出」的实时感、或对中文/方言质量有更高要求 → 流式（`openai-realtime` / `vllm-realtime`）；要完全本地、离线、无外部端点、首轮最快 → 默认 `whisper`。
+  - 相关差异编号：`D008`（本地 STT 无流式入口）、`D005`（流式后端与真实服务端联调）、`D036`（STT 参数命名模板）。
 
 ---
 
