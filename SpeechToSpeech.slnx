@@ -12,6 +12,7 @@
     <Project Path="src/SpeechToSpeech.Backends.TensorSharp/SpeechToSpeech.Backends.TensorSharp.csproj" />
     <Project Path="src/SpeechToSpeech.Cli/SpeechToSpeech.Cli.csproj" />
     <Project Path="src/SpeechToSpeech.Core/SpeechToSpeech.Core.csproj" />
+    <Project Path="src/SpeechToSpeech.Demo.Web/SpeechToSpeech.Demo.Web.csproj" />
     <Project Path="src/SpeechToSpeech.Realtime/SpeechToSpeech.Realtime.csproj" />
   </Folder>
   <Folder Name="/tests/">

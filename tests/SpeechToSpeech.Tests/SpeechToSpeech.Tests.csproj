@@ -30,6 +30,7 @@
     <ProjectReference Include="..\..\src\SpeechToSpeech.Backends.ManySpeech\SpeechToSpeech.Backends.ManySpeech.csproj" />
     <ProjectReference Include="..\..\src\SpeechToSpeech.Transport.WebRtc\SpeechToSpeech.Transport.WebRtc.csproj" />
     <ProjectReference Include="..\..\src\SpeechToSpeech.Cli\SpeechToSpeech.Cli.csproj" />
+    <ProjectReference Include="..\..\src\SpeechToSpeech.Demo.Web\SpeechToSpeech.Demo.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

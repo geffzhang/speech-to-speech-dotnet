@@ -208,6 +208,21 @@ uv run uvicorn --app-dir demo server:app --reload --port 7860
 - 依赖：`fastapi` / `uvicorn` / `httpx` / `huggingface_hub[oauth]`（Python），npm 侧见 `demo/package.json`。`auth.py` / `limiter.py` 仅在 Space 环境启用，本地不加载。
 - demo 的模型加载仍在 `serve` 侧（懒加载，见 §1.1）；demo 本身只负责采集 / 渲染 / 对话编排。
 
+**ASP.NET Core 替代服务端**（`src/SpeechToSpeech.Demo.Web`）：同一套前端也可由本仓库的 ASP.NET Core 10 服务端托管，直连/本地模式行为与 `server.py` 对拍一致（45 条 key 端点零差异，见 `tools/smoke/demo_server_parity.py`）。裁掉 Space 专属的 auth / limiter / session / queue，保留静态前端 + `/api/config` + `/api/me` + `/api/calls` + `/api/search` + `/vendor/*`。
+
+```bash
+dotnet run --project src/SpeechToSpeech.Demo.Web --urls http://127.0.0.1:7860
+```
+
+要点：
+
+- **行为等价层** `PythonJson.cs`：JSON 解析/序列化按 CPython `json` 模块语义（NaN/Infinity、int/float 区分、大整数、浮点 repr `1.0`/`1e+16`、错误 msg/pos），供 422 校验形状与响应体逐字节对齐。
+- **路由分派**与 Starlette 同构：API 路由方法精确匹配（GET 不吃 HEAD），其余落静态（GET/HEAD 查文件，非 GET/HEAD 一律 405 JSON）。
+- **search 校验**复刻 pydantic v2 的 422 形状（`missing`/`string_type`/`model_attributes_type`/`json_invalid` 含 `loc`/`input`/`ctx.error`）；`input` 含 NaN/Infinity 时与上游一致回 **500 纯文本**（`json.dumps(allow_nan=False)` 炸掉）。
+- `_webrtc_calls_url` 逐边角对齐 Python `urlsplit`/`urlunsplit`（scheme 前缀判定**大小写敏感**、`WS://` 会被补成 `http://WS://h/p`、空串 → `http:///v1/realtime/calls`、`path.rstrip('/')`）。
+- `/api/calls` 无 env 钉定 URL 时回 `{"detail":"Not found."}`（带句点，与静态 404 的 `"Not Found"` 文案不同）；上游不可达回 502 `{"detail":"Speech service unreachable."}`。
+- 测试：`tests/SpeechToSpeech.Tests/DemoServerLogicTests.cs`（URL/ICE/config/PythonJson）+ `DemoHttpPipelineTests.cs`（422 形状、内容类型路由、方法矩阵、vendor/静态）。对拍脚本起 Python uvicorn 与 ASP.NET 双侧比对。
+
 ---
 
 ## 6. 错误契约
