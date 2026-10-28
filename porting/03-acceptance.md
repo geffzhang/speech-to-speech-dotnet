@@ -64,11 +64,11 @@
 | `SpeechToSpeech.Backends.Lingua` | 1 | 文本语言识别（lingua 原生库） |
 | （CLI） | — | 不作公开表面，仅入口 |
 
-- 签名差异 / 运行时差异 / 平台限制：见 `02-differences.md`（44 条，编号 C001–E003、C010–C019、D011–D022）
+- 签名差异 / 运行时差异 / 平台限制：见 `02-differences.md`（74 条，编号 C001–C037、D001–D035、E001–E003；resolved 58 / accepted 16 / gap 0）
 
 ## 协议锁定
 
-- [x] 关键协议字段名与顺序由测试锁定 —— `ProtocolShapeTests` + `AssistantItemLifecycleTests` 共 25 例覆盖 24 类服务端事件、`event_id` 必带、错误嵌套结构、`response.done` 四终态、`response` 载荷完整性（usage / output_modalities / voice / conversation_id / output）、created 与 done 载荷同构、转写完成的必填 `usage`、助手消息项完整生命周期；另有 `corpus/protocol` **41 条**差分语料与上游逐字段比对（含编码，到 BMP 外的字符为止），锁定的是「与参照实现一致」而非仅「自证一致」
+- [x] 关键协议字段名与顺序由测试锁定 —— `ProtocolShapeTests` + `AssistantItemLifecycleTests` 共 25 例覆盖 24 类服务端事件、`event_id` 必带、错误嵌套结构、`response.done` 四终态、`response` 载荷完整性（usage / output_modalities / voice / conversation_id / output）、created 与 done 载荷同构、转写完成的必填 `usage`、助手消息项完整生命周期；另有 `corpus/protocol` **43 条**差分语料与上游逐字段比对（含编码，到 BMP 外的字符为止），锁定的是「与参照实现一致」而非仅「自证一致」
 - [x] 服务端事件覆盖 26/26（100%）—— `python tools/refprobe/protocol_coverage.py` 可复跑。扩展事件 `speech_to_speech.output_audio.visemes` 于 D032 补上（开启 `--enable_visemes` 时发）。原先缺的 9 类（含官方客户端渲染入口 `output_item.added` / `content_part.added`）已补齐并进语料
 - [x] 跨语言数字范围已校验（±2^53−1）—— `ServerEvent` 的计数/索引类参数均为 `int`（`audio_start_ms` / `audio_end_ms` / `output_index`），不出 `long`；延迟统计用秒级 `double`，只留在 `TurnLatencyStore` 内部。**唯一带 `double` 上线的是 D032 的口型事件**（`visemes[].start_s/end_s`），值域 [0, 响应音频时长]、量化到 10 ms，与上游 float 载荷同形，远离 2^53，不存在精度越界
 - [x] 编码与行尾归一化策略已确定 —— 出线 UTF-8 文本帧 + 紧凑 JSON（`WriteIndented = false`，`separators` 效果等价于上游的 `,`/`:` 无空格），**不含换行**；`Encoder = UnsafeRelaxedJsonEscaping` 保证中文与 base64 的 `+` `/` 不被转义成 `\uXXXX`，与上游 Starlette `send_json`（`ensure_ascii=False`）一致（C012，已验证）。入线同解码，`input_audio_buffer.append` 走 base64 二进制而非文本
@@ -296,7 +296,7 @@ python tools/refprobe/protocol_coverage.py
 
 协议层已从「客户端可能看不到回复」补到 26/26 覆盖（最后一格 visemes 由 D032 补齐）：消息项生命周期（`output_item.added` →
 `content_part.added` → delta → `content_part.done` → `output_item.done`）、提交确认、会话项删除、
-转写失败的 item 作用域通告都已到位，并有 41 条差分语料与 27 条形状断言双重锁定。
+转写失败的 item 作用域通告都已到位，并有 43 条差分语料与 27 条形状断言双重锁定。
 终态全部收口：取消回 `response.done`（status=cancelled）、`status_details` 对**任何终态都发**
 （原先只在异常时发，completed 完全不带，见 C015/C016）、`status_details.type` 与 status 同域、
 `failed` 的 `error` 只带 `type`。
@@ -833,3 +833,25 @@ local 侧带 `--local-audio-*` 前缀）本实现一个都没解析——Command
    「连上了但什么都收不到」，很像客户端 bug）。
 2. `timeout` 杀 Windows 进程不彻底：残留的 talk/serve 会锁住 `speech-to-speech.exe`，
    下次构建 MSB3027。跑完先确认进程清干净再 build。
+
+### accepted 条目有效期核查（2026-10-28，C029 教训的延伸：accepted 的理由也要核）
+
+对全部 16 条 accepted 逐条重验「接受理由是否仍与代码/上游一致」。结论：**15 条维持，1 条修订（D008）**。
+
+| ID | 核验结论 |
+|---|---|
+| C005 分句规则 | 维持。刻意改进有明确动机（CJK 长回复首段音频不拖尾），单测锁定 |
+| C008 Parts 优先 | 维持。上游 `pipeline/messages.py:131` 复核确认：parts 显式设置时 text 由 parts 重算，账本描述与上游一致 |
+| C009 / C030 / C031 重采样与解码内核 | 维持。均只影响送入下游的音频波形细节，不改线上消息形状；C030/C031 有 ≥20 dB 带外压制与语料验证背书 |
+| C010 WASAPI/WinMM 双 API | 维持。平台实现选择，代价（热插拔行为差异）已在账本写明 |
+| C032 HF 云工作流 | 维持。报告纯 JSON 落盘即可用 compare 对比，schema 兼容已验证 |
+| C033 / C034 口型 | 维持。wire 契约 `{viseme 0-21, start_s, end_s}` 锁定，密度差异是「闭口信息」而非噪声 |
+| D001 整句合成 | 维持。三重补偿有单测，代价已实测记账（2026-10-27：废弃合成 104 s、下一轮被顶 94.8 s） |
+| D002 能量门限近似开口 | 维持。分段权威仍是 Silero，只影响极轻语音的打断延迟 |
+| D004 Paraformer 无语言字段 | 维持。`language_code=null` 下游按未判定处理，TTS 语言由 Qwen3-TTS 自判 |
+| **D008 本地 STT 无增量转写** | **修订范围**。原表述「客户端收不到 transcription.delta」是全称，已被 D005（2026-10-26 收口的 openai-realtime / vllm-realtime 流式 STT）推翻——选流式后端时 `IStreamAwareSttBackend → IStreamingSttSink → PartialTranscription → transcription.delta` 全链贯通，serve 侧发送点在 `RealtimeConnection.cs` 的 `PartialTranscriptionEvent` 分支。D008 收窄为「ManySpeech 本地路径无流式入口（该库无运行期流式接口，与 D034 的 language 同类约束）」，维持 accepted |
+| D007 LLM 单并发 | 维持。信号量串行化，多客户端排队不崩溃 |
+| D010 后端注册表 | 维持。31 个名字与 `BackendRegistry.cs` 注释一致，未实现者带 `UnsupportedReason` 报错不静默 |
+| E003 缺模型运行期报错 | 维持。D035 真跑再次确认该行为（连接构建期即拒，客户端侧「连上但收不到」） |
+
+**方法备注**：核查动作 = ① 账本 decision 里的每个事实主张找代码/实测对应物；② 对「上游会怎么做」的主张回上游源码验证（如 C008）；③ 对「不影响可观察行为」的主张检查其后的移植工作是否引入了反例（D008 即此类）。账本修订仅 D008 一条，`02-differences.md` 已重新渲染。
