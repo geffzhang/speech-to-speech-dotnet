@@ -103,6 +103,8 @@ listening on ws://127.0.0.1:8765/v1/realtime
 
 JSON 编码口径（与上游一致）：UTF-8 **不转义**、base64 特殊字符不转义、BMP 外字符不转义，转义集合只含引号/反斜杠/控制字符。
 
+**`previous_item_id` 字段要点**：`input_audio_buffer.committed` 与 `conversation.item.created` 都带 `previous_item_id`，表示新会话项接在哪个已有项之后。该键**始终存在**——会话首个项为 `null`（与上游 `event.model_dump()` 不 `exclude_none` 对齐，也满足按 OpenAI 形状建模的客户端）。
+
 ### 3.5 最小示例（消息外壳）
 
 完整可跑的客户端见仓库 `src/SpeechToSpeech.Cli` 的 `talk` 子命令，或用 `tools/smoke/` 的脚本。下面是最小自包含 WebSocket 骨架：
@@ -180,7 +182,7 @@ dotnet run
 
 - 库通过 `OpenAIRestClientFactory` 把 `BaseAddress` 硬编码为 `https://api.openai.com/v1/realtime/`。要指向本地，需**自定义 `IHttpClientFactory`**，经 `WebRTCEndPoint` 的 DI 构造函数注入（见 `Program.cs` 的 `LocalHttpClientFactory`）。
 - 环境变量 `SPEECH_TO_SPEECH_REALTIME_URL` 可覆盖 REST 基址（默认 `http://127.0.0.1:8765/v1/realtime/`），`S2S_VOICE`（默认 `marin`）、`S2S_PROMPT`（默认 `Say Hi!`）。
-- **兼容性注**：SIPSorcery 的 DTO 对某些事件要求 `previous_item_id` 等必填字段，而本项目省略了这些字段。库检测到后会打印一条反序列化警告并把事件降级为 `RealtimeUnknown` 回退——**非致命，会话与音频照常流动**。如你介意日志噪音，可在库里给事件 DTO 去掉必填约束。
+- **兼容性注**：SIPSorcery 用 C# `required` 声明 `previous_item_id`，本项目早期对会话首个项省略该键，导致 SIPSorcery 反序列化告警并降级 `RealtimeUnknown`。现已对齐上游：`previous_item_id` **键始终存在**（首个项为 `null`，与上游 `model_dump()` 不 `exclude_none` 一致），SIPSorcery 可正常解析，不再告警。
 
 ### 5.1 已实测的行为
 
@@ -203,7 +205,7 @@ dotnet run
 
 ## 7. 与 OpenAI 的兼容度与限制
 
-- **协议面**：事件名与字段集同 OpenAI Realtime，但**字段集有取舍**（部分 OpenAI 必填字段本项目省略，见 §5.1 的 SIPSorcery 例子）。
+- **协议面**：事件名与字段集同 OpenAI Realtime，但**字段集与必填约束有取舍**（以 `porting/differences.jsonl` 为准；`previous_item_id` 已对齐——键始终存在，首个项为 `null`）。
 - **无鉴权 / 无 `/sessions` 临时令牌**。
 - **「语义接缝」差异**以 `porting/differences.jsonl` 为准（`02-differences.md` 是渲染产物）。关键差异编号：`D035`（`talk`/`local` 客户端参数族）、`D008`（ManySpeech 本地 STT 无增量转写，流式实时转写走 `openai-realtime`/`vllm-realtime` 后端）、`D036`（STT 参数命名模板）、`E003`（缺模型运行期报错）。
 - **转写后端二选一**：默认 ManySpeech 离线整段（`completed` 事件）；选 `--stt openai-realtime` / `vllm-realtime` 才收 `transcription.delta` 增量（需外部端点，见 `docs/vllm-realtime-d005-integration.md`）。
@@ -214,5 +216,5 @@ dotnet run
 
 - **连上了但收不到 `session.created`**：几乎总是缺模型路径——serve 在连接构建期已拒，先看 serve 日志。
 - **首轮很慢**：模型懒加载。热态后正常。
-- **想减少日志噪音**：如用 SIPSorcery 参考示例，去掉事件 DTO 的必填字段约束（`previous_item_id` 等）。
+- **SIPSorcery 反序列化告警**：若用旧版示例或旧服务端，可能因 `previous_item_id` 缺失而告警；现服务端该键始终带（首个项为 `null`），无需处理。
 - **浏览器直连**：无需 /sessions；若前端框架封装了该步，去掉即可。
