@@ -16,7 +16,8 @@ public enum BackendKind
 ///
 /// <see cref="Implemented"/> 为 false 表示该名字在上游存在、但当前 C# 构建没有对应运行时；
 /// 选择它会得到一条明确的 <see cref="BackendUnavailableException"/>，而不是静默降级。
-/// 这是"全后端平铺"的诚实形态：31 个名字全部可见，能跑的跑，不能跑的报清原因。
+/// 这是"全后端平铺"的诚实形态：上游 31 个名字全部可见，另加 C# 专属的 tensorsharp，共 32 个；
+/// 能跑的跑，不能跑的报清原因。
 /// </summary>
 public sealed record BackendSpec(
     string Name,

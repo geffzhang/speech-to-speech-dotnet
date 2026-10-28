@@ -3,7 +3,7 @@
 把「参照实现的行为」变成可执行证据。四类证据缺一不可。
 
 统计口径：上游 `tests/` 共 **119 个 `test_*.py`**、**2,082 个测试函数**（`evals/` 85 + `tool_call/` 74 + `openai_realtime/` 588 + 根目录 1,335）。
-本实现 **39 个测试文件 / 473 个测试方法**（参数化展开后 **503 例**，全绿）。数量不对称是刻意取舍：上游大量用例锁的是各后端内部与 Python 运行时特有行为，本实现只锁跨语言边界上可复现的语义（取舍逐项见 1.2）。
+本实现 **41 个测试文件 / 518 个测试方法**（参数化展开后 **688 例**，全绿）。数量不对称是刻意取舍：上游大量用例锁的是各后端内部与 Python 运行时特有行为，本实现只锁跨语言边界上可复现的语义（取舍逐项见 1.2）。
 
 ---
 
@@ -18,7 +18,7 @@
 | `test_runtime_config.py` | `PipelineSemanticsTests.RuntimeConfigTests` | 9 | 改写 | 字段级深合并、未触碰嵌套字段保留、`turn_detection` 默认值与 OpenAI server VAD 对齐；另 4 例锁 `output_modalities` → `WantsAudio` 的四种取值（缺省/空数组/含 audio/text-only） |
 | `test_pipeline_messages.py`（TtsInput） | `PipelineSemanticsTests.TtsInputTests` | 3 | 移植 | `selected_language` → TTS 语言的 `"auto"`→null 语义逐条对齐 |
 | 上游无对应（F#09 handler 循环契约） | `BaseHandlerTests.BaseHandlerTests` | 5 | 新增 | 逐条覆盖 `BaseHandler` 六条契约：软控制转发不中断、`PipelineEnd` 断循环、异常只记录不终止线程、过期代际静默丢弃、两条路径都写终止哨兵 |
-| `test_backend_registry.py` | `BaseHandlerTests.BackendRegistryTests` | 3 | 改写 | 上游 43 例锁 CLI 解析与后端构造；本实现 3 例锁「31 个名字全注册」「不可用带原因」「未知名字列出全部合法值」 |
+| `test_backend_registry.py` | `BaseHandlerTests.BackendRegistryTests` | 3 | 改写 | 上游 43 例锁 CLI 解析与后端构造；本实现 3 例锁「上游 31 个名字全注册（另加 C# 专属 tensorsharp，共 32 个）」「不可用带原因」「未知名字列出全部合法值」 |
 | `test_llm_utils.py` | `TextAndAudioTests.TextNormalizerTests` | 12 | 移植 + 表征 | Unicode 规范化、Markdown 剥离、确定性分句（含缩写白名单）。末一条 `TreatsCjkTerminatorsAsBoundaries_UnlikeUpstreamPunkt` 是**刻意分歧的表征**，对应 C005 与 `corpus/text` |
 | — | `TextAndAudioTests.SentenceAccumulatorTests` | 3 | 新增 | 句级流式切分（上游散落在 `test_tts_input_coalescing.py` 的时序断言里，此处提为独立单元） |
 | `openai_realtime/test_output_resampling.py` | `TextAndAudioTests.AudioUtilTests` | 5 | 改写 | PCM16 往返量化误差、定长切块、重采样比、WAV 头标记 |
@@ -231,6 +231,6 @@
 | 协议层只比单事件形状，不比顺序 | 语料是「一事件一例」，没有覆盖一整轮的上行/下行时序 | 中——事件顺序错乱（例如 delta 先于 item.added）测不出来 | 复用上游 `realtime_contract.py` 的契约检查器，重放同一事件序列 |
 | 轮次状态机的接合点未实测 | 状态机自身与上游逐值一致，但 `VadHandler` 何时调 `SpeechCandidateStarted` / `SegmentDiscarded` 没有真跑验证 | 中——接错时机仍会退化成「卡住」或「停顿即两轮」 | 真跑一轮带打断的对话，对照上游日志的轮次序列 |
 | `local` / `talk` 听感实跑 | 参数族、协议面与真跑握手已闭合（D035，2026-10-28）：`serve` + `talk --print-json` 真跑走完 VAD commit → 转写完成 → response 创建；**剩下的只有真人对着麦克风说话的听感**（音色、回声、设备延迟） | 低——队列时序、协议握手与转写链路均已实测 | 找时间人对麦克风说一轮，顺带验证 `--local-audio-*` 参数 |
-| 12 个后端无运行时 | D010 | 低——`BackendUnavailableException` 显式报错，不静默降级 | 按需逐步补齐 |
+| 21 个后端无 C# 实现（注册表 32 个名字中） | D010 | 低——`BackendUnavailableException` 显式报错，不静默降级 | 按需逐步补齐 |
 | 跨平台音频 I/O | E001 已解决 —— Windows（WASAPI+WinMM）/Linux（ALSA）/macOS（PortAudioSharp2 1.0.6，与上游 sounddevice 同引擎）三后端齐备 | 低 —— Linux ALSA 与 macOS 路径均未在真实设备上验证；服务端 `serve` 不受影响 | Windows 已实跑设备创建；Linux 需在装 `libasound.so.2` 的机器上跑一轮；macOS 需真机跑一轮 talk |
 | 惰性加载的模型路径 | E003 运行期报错 | 低——首次合成才失败，非启动即失败 | 可加 `--check-models` 预检 |
