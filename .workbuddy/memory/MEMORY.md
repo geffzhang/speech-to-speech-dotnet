@@ -23,7 +23,8 @@ NuGet 正式版，不挂本地工程引用。已用：ManySpeech.SileroVad 1.1.2
 
 ## 层级陷阱速查
 
-- **音频**：`AudioDevices.cs` 集中平台后端（Win=WASAPI+WinMM、Linux=ALSA、macOS=PortAudio）；WasapiRecorder 非 IWavIn；ClientWebSocket 禁并发 Send（入队+单消费者）；ManySpeech OnlineVad 每段一条流（C023）；脚本推流三要素=真实时长 20ms 帧+尾补 1.5s 静音+proxy=None。
+- **音频**：`AudioDevices.cs` 集中平台后端（Win=WASAPI+WinMM、Linux=ALSA、macOS=PortAudio），设备索引贯通三后端（WinMM DeviceNumber / WASAPI `EnumerateAudioEndPoints` 大写 P / ALSA `plughw:<n>,0` / PortAudio 直通），越界显式报错；WasapiRecorder 非 IWavIn；ClientWebSocket 禁并发 Send（入队+单消费者）；ManySpeech OnlineVad 每段一条流（C023）；脚本推流三要素=真实时长 20ms 帧+尾补 1.5s 静音+proxy=None。
+- **客户端（D035）**：`talk`/`local` 参数族与协议面已对齐上游——`RealtimeAudioClientOptions.BuildSessionUpdate`（16k **省略 format**/24k 显式/其余报错 + extensions 快照订阅 + interrupt_response）、`PlaybackBuffer`（首包门槛/finish 放行/欠读回 idle/150ms 活动窗）、麦克风按 send_rate 直通不重采样；`FromTalkArgs`/`FromLocalArgs` 工厂，local 缺省 buffer openai→196。**talk 真跑必须带全模型路径**（缺 VAD 时 serve 连接构建期即拒，客户端「连上但收不到」像 bug 不是 bug）；`timeout` 杀 Windows 进程不彻底，残留锁 exe → MSB3027。留待 accepted：tool-module/箭头切 voice/renderer 细节/连接重试。
 - **协议**：`ServerEvent.Serialize` 用 `WireJson`（自写 RelaxedJsonEncoder，不用 UnsafeRelaxedJsonEscaping，C012/C017）；探针必须调产品序列化入口；`ResolveVoice` 一处定义喂两处；`BuildResponse` 唯一产地；status_details 任何终态都发；FIFO 用 Queue。**会话 id `session_<32hex>` 三处同一值**（session.created/updated 的 session.id、WebRTC Location、DELETE 路径，C029）——id 由 `RealtimeConnection._sessionId` 一处生成，事件构造器注入时 DeepClone 不回写配置；客户端自造的 id 必须被覆盖。
 - **turns/时延**：语料三前提=自包含+时钟可注入(`Func<double>`)+纯量返回；浮点 6 位定长字符串绝不用容差；复开窗口三值取 max；时延账按 response_key；hold_s 区间并集；metadata 逐字符字符串；round 9 只用于 vad_decision_s/hold_s；日志走 stderr。
 - **HOLD 宽限**：算出来≠生效——输出侧逐片阻塞等、输入侧只等 ProcessingDeadline；陈旧收尾照发 done(Succeeded=false)；丢弃修订要 `DiscardPendingTurn`。
@@ -72,6 +73,6 @@ session.created：WS 握手后发，WebRTC 由 datachannel onOpen 发（幂等�
 **跨窗口认亲（C037）**：身份**只按音频时间重叠**——起点帧抖 3–8 帧、powerset 通道号排列无关（同一句 2→1→2→1）。次级判据：同窗同时=真重叠；换通道要**验声**（`CosineDistance` ≤ `MatchThreshold`）；**碎片判据必须排在「同时」判据之前**（否则长轨道中 2 帧亮点成假说话人）。`IsReReport` 余量 `8×frameShift`。真跑 16 段/29.09s → **6 段/14.44s、重叠 0**。
 **三个真缺陷教训**：① scratch 复用 + `CopyTo` 按**目标长度**复制 → 声纹夹带后续音频（向量趋同→只剩 1 人）；② `Associate` 只在 `StartFrame==0` 查映射 → 同轮次被多窗重复建段（段总时长 > 音频本身）；③ C036 凹陷判据 `0.7×onset` 在真实概率（换人处约 0.40）上永不成立 → 双人缝成一段。
 
-## 当前状态（2026-10-27）
+## 当前状态（2026-10-28）
 
-差异账 73 条：resolved 57 / accepted 16 / **gap 0**。协议语料 43 条（事件覆盖 26/26）。测试 482/482。Python 参照环境 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（aiortc 1.15、numpy、kaldi-native-fbank、onnxruntime）。
+差异账 74 条：resolved 58 / accepted 16 / **gap 0**。协议语料 43 条（事件覆盖 26/26）。测试 503/503。剩余：真人麦克风听感一轮、Linux/macOS 真机。Python 参照环境 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（aiortc 1.15、numpy、kaldi-native-fbank、onnxruntime）。
