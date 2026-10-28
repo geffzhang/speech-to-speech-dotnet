@@ -188,6 +188,26 @@ dotnet run
 
 用该示例对真实 `serve`（8765 端口）联调：SDP 协商成功、`oai-events` 数据通道建立、`session.created` / `session.updated` / `input_audio_buffer.committed` / `conversation.item.created` 事件按序到达，无协议错误。模型懒加载下的首轮延迟与真实语音触发请按 §1.1 理解。
 
+### 5.2 浏览器前端 demo（`demo/`，上游 HF 自带）
+
+仓库根下的 `demo/` 是上游 huggingface/speech-to-speech 自带的**浏览器语音对话 UI**，走 OpenAI Realtime **GA** 协议，WebSocket / WebRTC 双传输（Settings → Transport 切换）。它默认以 `ws://127.0.0.1:8765/v1/realtime` 为后端——正是本项目 `serve` 的端点。
+
+**本地对接**：设 `SPEECH_TO_SPEECH_URL=ws://localhost:8765/v1/realtime` 后，demo 的服务端（`server.py`）会**禁用** 加载均衡 / 排队 / 计量 / 登录等 Space 专属逻辑，浏览器直连我们的 `serve`，免鉴权。
+
+```bash
+npm ci --prefix demo
+uv pip install -r demo/requirements.txt
+export SPEECH_TO_SPEECH_URL=ws://localhost:8765/v1/realtime
+uv run uvicorn --app-dir demo server:app --reload --port 7860
+```
+
+要点：
+
+- 前端用 `@openai/agents@0.14.3` 的适配器封装 Realtime 会话，**不依赖本仓库的 .NET 客户端**；浏览器端 VAD 走 `@ricky0123/vad-web` + `onnxruntime-web`。
+- `server.py` 另暴露 `/api/calls` 代理 WebRTC SDP 协商（把浏览器 offer 转发到 `{s2s}/v1/realtime/calls`）。
+- 依赖：`fastapi` / `uvicorn` / `httpx` / `huggingface_hub[oauth]`（Python），npm 侧见 `demo/package.json`。`auth.py` / `limiter.py` 仅在 Space 环境启用，本地不加载。
+- demo 的模型加载仍在 `serve` 侧（懒加载，见 §1.1）；demo 本身只负责采集 / 渲染 / 对话编排。
+
 ---
 
 ## 6. 错误契约
