@@ -75,4 +75,4 @@ session.created：WS 握手后发，WebRTC 由 datachannel onOpen 发（幂等�
 
 ## 当前状态（2026-10-28）
 
-差异账 74 条：resolved 58 / accepted 16 / **gap 0**。协议语料 43 条（事件覆盖 26/26）。测试 503/503。剩余：真人麦克风听感一轮、Linux/macOS 真机。Python 参照环境 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（aiortc 1.15、numpy、kaldi-native-fbank、onnxruntime）。
+差异账 75 条：resolved 58 / accepted 17 / **gap 0**。协议语料 43 条（事件覆盖 26/26）。测试 503/503。剩余：真人麦克风听感一轮、Linux/macOS 真机、D005 流式联调（手册 docs/vllm-realtime-d005-integration.md，等 GPU/key；无 GPU 可先走 OpenAI hosted 覆盖五项中四项）。D036：上游 STT 参数带 _stt 段 vs 本实现 {backend}_* 模板，映射表在手册 §5.1。Python 参照环境 `~/.workbuddy/binaries/python/envs/default/Scripts/python.exe`（aiortc 1.15、numpy、kaldi-native-fbank、onnxruntime）。
