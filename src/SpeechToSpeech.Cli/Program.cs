@@ -156,6 +156,11 @@ internal static class Program
         return 0;
     }
 
+    /// <summary>
+    /// talk 的参数装配见 <see cref="RealtimeAudioClientOptions.FromTalkArgs"/>（可测）。
+    /// tool-module / voices / api-key / log-transcripts / connection-retry-timeout
+    /// 见差异账 D035 的留待部分。
+    /// </summary>
     private static async Task<int> TalkAsync(CommandLine line)
     {
         var url = line.Value("url") ?? "ws://127.0.0.1:8765/v1/realtime";
@@ -165,7 +170,9 @@ internal static class Program
             return 1;
         }
 
-        await using var client = new AudioClient(new Uri(url), devices);
+        var options = RealtimeAudioClientOptions.FromTalkArgs(line);
+
+        await using var client = new AudioClient(new Uri(url), devices, options);
         try
         {
             await client.RunAsync().ConfigureAwait(false);
@@ -206,6 +213,10 @@ internal static class Program
         }
 
         var port = line.IntValue(8765, "port");
+
+        // local 的客户端参数走 --local-audio-* 前缀（上游 LocalAudioArguments 同名）。
+        var clientOptions = RealtimeAudioClientOptions.FromLocalArgs(line);
+
         var localOptions = new RealtimeServerOptions
         {
             Host = "127.0.0.1",
@@ -235,7 +246,7 @@ internal static class Program
             // 所以这里必须等宿主真正开始监听后再连，否则会撞上竞态。
             await Task.Delay(300, shutdown.Token).ConfigureAwait(false);
 
-            await using var client = new AudioClient(new Uri(server.Endpoint), devices);
+            await using var client = new AudioClient(new Uri(server.Endpoint), devices, clientOptions);
             await client.RunAsync().ConfigureAwait(false);
         }
         catch (OperationCanceledException)

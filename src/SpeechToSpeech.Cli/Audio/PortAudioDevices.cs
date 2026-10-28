@@ -24,11 +24,12 @@ internal sealed class PortAudioAudioDevices : IAudioDeviceSet
 {
     public string Name => "PortAudio (macOS)";
 
-    public IWaveIn CreateMicrophone(int sampleRate, int bufferMilliseconds) =>
-        new PortAudioWaveIn(sampleRate, bufferMilliseconds);
+    // 索引与上游 sounddevice（底层同为 PortAudio）的设备编号同表同义。
+    public IWaveIn CreateMicrophone(int sampleRate, int bufferMilliseconds, int? deviceIndex) =>
+        new PortAudioWaveIn(sampleRate, bufferMilliseconds, deviceIndex);
 
-    public IWavePlayer CreateSpeaker(int latencyMilliseconds) =>
-        new PortAudioWavePlayer(latencyMilliseconds);
+    public IWavePlayer CreateSpeaker(int latencyMilliseconds, int? deviceIndex) =>
+        new PortAudioWavePlayer(latencyMilliseconds, deviceIndex);
 }
 
 /// <summary>
@@ -41,16 +42,18 @@ internal sealed class PortAudioAudioDevices : IAudioDeviceSet
 internal sealed class PortAudioWaveIn : IWaveIn
 {
     private readonly uint _framesPerBuffer;
+    private readonly int? _deviceIndex;
     private WaveFormat _waveFormat;
     private PortAudioSharp.Stream? _stream;
     private bool _recording;
     private bool _initialized;
     private bool _disposed;
 
-    public PortAudioWaveIn(int sampleRate, int bufferMilliseconds)
+    public PortAudioWaveIn(int sampleRate, int bufferMilliseconds, int? deviceIndex)
     {
         _waveFormat = new WaveFormat(sampleRate, 16, 1);
         _framesPerBuffer = (uint)Math.Max(1, sampleRate * bufferMilliseconds / 1000);
+        _deviceIndex = deviceIndex;
     }
 
     /// <summary>NAudio 的 WaveFormat 是可写属性；录制开始后改格式会被拒绝。</summary>
@@ -106,10 +109,13 @@ internal sealed class PortAudioWaveIn : IWaveIn
 
     private PortAudioSharp.Stream OpenInputStream()
     {
-        var device = PortAudio.DefaultInputDevice;
-        if (device == PortAudio.NoDevice)
+        var device = _deviceIndex ?? PortAudio.DefaultInputDevice;
+        if (device == PortAudio.NoDevice || device < 0 || device >= PortAudio.DeviceCount)
         {
-            throw new InvalidOperationException("PortAudio：没有可用的默认输入设备。");
+            throw new InvalidOperationException(
+                _deviceIndex is { } index
+                    ? $"PortAudio：输入设备索引 {index} 不存在（共 {PortAudio.DeviceCount} 个设备）。"
+                    : "PortAudio：没有可用的默认输入设备。");
         }
 
         var deviceInfo = PortAudio.GetDeviceInfo(device);
@@ -216,6 +222,7 @@ internal sealed class PortAudioWaveIn : IWaveIn
 internal sealed class PortAudioWavePlayer : IWavePlayer
 {
     private readonly double _suggestedLatencySeconds;
+    private readonly int? _deviceIndex;
     private IWaveProvider? _provider;
     private PortAudioSharp.Stream? _stream;
     private float _volume = 1.0f;
@@ -223,9 +230,10 @@ internal sealed class PortAudioWavePlayer : IWavePlayer
     private bool _initialized;
     private bool _disposed;
 
-    public PortAudioWavePlayer(int latencyMilliseconds)
+    public PortAudioWavePlayer(int latencyMilliseconds, int? deviceIndex)
     {
         _suggestedLatencySeconds = latencyMilliseconds / 1000.0;
+        _deviceIndex = deviceIndex;
     }
 
     /// <summary>软件音量：PortAudio 不暴露系统音量，在回调里对 int16 样本做缩放。</summary>
@@ -273,10 +281,13 @@ internal sealed class PortAudioWavePlayer : IWavePlayer
 
     private PortAudioSharp.Stream OpenOutputStream(WaveFormat format)
     {
-        var device = PortAudio.DefaultOutputDevice;
-        if (device == PortAudio.NoDevice)
+        var device = _deviceIndex ?? PortAudio.DefaultOutputDevice;
+        if (device == PortAudio.NoDevice || device < 0 || device >= PortAudio.DeviceCount)
         {
-            throw new InvalidOperationException("PortAudio：没有可用的默认输出设备。");
+            throw new InvalidOperationException(
+                _deviceIndex is { } index
+                    ? $"PortAudio：输出设备索引 {index} 不存在（共 {PortAudio.DeviceCount} 个设备）。"
+                    : "PortAudio：没有可用的默认输出设备。");
         }
 
         var deviceInfo = PortAudio.GetDeviceInfo(device);

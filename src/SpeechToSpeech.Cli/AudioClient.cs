@@ -3,45 +3,46 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using NAudio.Wave;
-using SpeechToSpeech.Core.Audio;
 using SpeechToSpeech.Cli.Audio;
 
 namespace SpeechToSpeech.Cli;
 
 /// <summary>
-/// 打包的麦克风/扬声器客户端。
+/// 打包麦克风/扬声器客户端（<c>talk</c> / <c>local</c>），行为对齐上游
+/// <c>audio_client.py</c> 的主链路（差异账 D035）：
 ///
-/// 对应上游 <c>speech-to-speech talk</c>。四条行为要守住：
 /// <list type="bullet">
-/// <item>上行统一成 24 kHz / 16 bit / 单声道 PCM 再 base64，与服务端 <c>session.update</c> 的声明一致；</item>
-/// <item>下行 <c>response.output_audio.delta</c> 立即进播放缓冲，不自己攒整段；</item>
-/// <item>被打断时清空播放缓冲——否则用户会听到上一轮回答的尾巴；</item>
-/// <item>麦克风回调只做入队，重采样与发送交给单一消费者线程。</item>
+/// <item>连接后先发 <see cref="RealtimeAudioClientOptions.BuildSessionUpdate"/>——
+/// 默认 16 k 双向**不声明 format**（走服务端原生速率），并订阅实时转写快照；</item>
+/// <item>麦克风 PCM 按 send_rate **直通**上行（不重采样；上游同样直发）；</item>
+/// <item>下行音频进 <see cref="PlaybackBuffer"/>：首包攒满才开播、cancelled/cleared 即清；</item>
+/// <item>转写与回复走控制台：conversation_only（默认）只显示对话，
+/// <c>--verbose</c>/<c>--print-json</c> 叠加事件流。</item>
 /// </list>
 ///
-/// 最后一条不是优化而是正确性约束：<see cref="IWaveIn.DataAvailable"/> 由驱动线程反复触发，
-/// 而 <see cref="ClientWebSocket"/> **不允许并发 Send**。把发送放在回调里，两次回调重叠就会
-/// 抛 <see cref="InvalidOperationException"/> 或让帧交错。同时重采样也不该占着音频回调，
-/// 那会拖慢下一次读取、造成驱动侧溢出。
-///
-/// 设备后端由 <see cref="AudioDevices"/> 按平台选择，见差异账 E001。
+/// 麦克风回调只做入队（与可选的 block 判定），发送交给单一消费者线程——这不是优化而是
+/// 正确性约束：<see cref="IWaveIn.DataAvailable"/> 由驱动线程反复触发，而
+/// <see cref="ClientWebSocket"/> **不允许并发 Send**。设备后端由
+/// <see cref="AudioDevices"/> 按平台选择，见差异账 E001；参数族与协议面见 D035。
 /// </summary>
 internal sealed class AudioClient : IAsyncDisposable
 {
-    private const int OutputSampleRate = 24_000;
-    private const int InputSampleRate = 16_000;
-    private const int MicBufferMilliseconds = 100;
-    private const int PlaybackLatencyMilliseconds = 120;
-
     private readonly Uri _endpoint;
+    private readonly RealtimeAudioClientOptions _options;
     private readonly IAudioDeviceSet _devices;
     private readonly ClientWebSocket _socket = new();
-    private readonly BufferedWaveProvider _playback;
+    private readonly PlaybackBuffer _playback;
     private readonly IWavePlayer _speaker;
+
+    /// <summary>播放侧期望延迟（ms）。上游 sounddevice 输出流未显式设延迟，这里取历史实测稳定值。</summary>
+    private const int PlaybackLatencyMilliseconds = 120;
+
+    /// <summary>conversation_only = 干净对话显示；verbose/print_json 任一开启即切换到诊断显示。</summary>
+    private readonly bool _conversationOnly;
 
     /// <summary>麦克风原始 PCM 的单一消费者队列。有界 + 丢最旧，音频堆积没有意义。</summary>
     private readonly Channel<byte[]> _micQueue = Channel.CreateBounded<byte[]>(
-        new BoundedChannelOptions(capacity: 64)
+        new BoundedChannelOptions(capacity: 128)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
@@ -55,19 +56,15 @@ internal sealed class AudioClient : IAsyncDisposable
     private Task? _senderTask;
     private CancellationTokenSource? _stopping;
 
-    public AudioClient(Uri endpoint, IAudioDeviceSet devices)
+    public AudioClient(Uri endpoint, IAudioDeviceSet devices, RealtimeAudioClientOptions options)
     {
         _endpoint = endpoint;
         _devices = devices;
+        _options = options;
+        _conversationOnly = !(options.Verbose || options.PrintJson);
 
-        _playback = new BufferedWaveProvider(
-            new WaveFormat(OutputSampleRate, 16, 1),
-            TimeSpan.FromSeconds(30))
-        {
-            DiscardOnBufferOverflow = true,
-        };
-
-        _speaker = _devices.CreateSpeaker(PlaybackLatencyMilliseconds);
+        _playback = new PlaybackBuffer(options.RecvRate, options.PlaybackBufferMs);
+        _speaker = devices.CreateSpeaker(PlaybackLatencyMilliseconds, options.OutputDevice);
         _speaker.Init(_playback);
         _speaker.PlaybackStopped += (_, args) =>
         {
@@ -84,33 +81,17 @@ internal sealed class AudioClient : IAsyncDisposable
         await _socket.ConnectAsync(_endpoint, _stopping.Token).ConfigureAwait(false);
         Console.WriteLine($"connected to {_endpoint}  [audio: {_devices.Name}]");
 
-        await SendAsync(new JsonObject
-        {
-            ["type"] = "session.update",
-            ["session"] = new JsonObject
-            {
-                ["type"] = "realtime",
-                ["audio"] = new JsonObject
-                {
-                    ["input"] = new JsonObject
-                    {
-                        ["format"] = new JsonObject { ["type"] = "audio/pcm", ["rate"] = OutputSampleRate },
-                        ["turn_detection"] = new JsonObject { ["type"] = "server_vad" },
-                    },
-                    ["output"] = new JsonObject
-                    {
-                        ["format"] = new JsonObject { ["type"] = "audio/pcm", ["rate"] = OutputSampleRate },
-                    },
-                },
-            },
-        }).ConfigureAwait(false);
+        await SendAsync(RealtimeAudioClientOptions.BuildSessionUpdate(_options)).ConfigureAwait(false);
 
         // 先起消费者，再开麦克风——否则头几个缓冲会在队列无人读时被丢。
         _senderTask = Task.Run(() => SendMicrophoneLoopAsync(_stopping.Token));
         StartMicrophone();
         _speaker.Play();
 
-        Console.WriteLine("Ready — start speaking. Ctrl+C to stop.");
+        if (!_conversationOnly)
+        {
+            Console.WriteLine("Ready — start speaking. Ctrl+C to stop.");
+        }
 
         try
         {
@@ -123,12 +104,19 @@ internal sealed class AudioClient : IAsyncDisposable
 
     private void StartMicrophone()
     {
-        _microphone = _devices.CreateMicrophone(InputSampleRate, MicBufferMilliseconds);
+        // 上游 blocksize 是采样数；换算成毫秒交给设备层（各家缓冲粒度不同）。
+        var bufferMs = Math.Max(1, _options.ChunkSize * 1000 / _options.SendRate);
+        _microphone = _devices.CreateMicrophone(_options.SendRate, bufferMs, _options.InputDevice);
 
-        // 刻意是同步回调：只入队，不做重采样、不碰 socket。
+        // 刻意是同步回调：只入队（与可选的 block 判定），不做重采样、不碰 socket。
         _microphone.DataAvailable += (_, args) =>
         {
             if (args.BytesRecorded <= 0)
+            {
+                return;
+            }
+
+            if (_options.BlockMicDuringPlayback && _playback.IsActive())
             {
                 return;
             }
@@ -149,21 +137,17 @@ internal sealed class AudioClient : IAsyncDisposable
         _microphone.StartRecording();
     }
 
-    /// <summary>队列的唯一消费者：16 kHz 原始 PCM → 24 kHz → base64 → 上行。</summary>
+    /// <summary>队列的唯一消费者：按 send_rate 直通 → base64 → 上行。</summary>
     private async Task SendMicrophoneLoopAsync(CancellationToken cancellationToken)
     {
         try
         {
             await foreach (var frame in _micQueue.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                var floats = AudioUtil.FromPcm16(frame);
-                var upsampled = AudioUtil.Resample(floats, InputSampleRate, OutputSampleRate);
-                var pcm24k = AudioUtil.ToPcm16(upsampled);
-
                 await SendAsync(new JsonObject
                 {
                     ["type"] = "input_audio_buffer.append",
-                    ["audio"] = Convert.ToBase64String(pcm24k),
+                    ["audio"] = Convert.ToBase64String(frame),
                 }).ConfigureAwait(false);
             }
         }
@@ -203,6 +187,7 @@ internal sealed class AudioClient : IAsyncDisposable
         }
     }
 
+    /// <summary>单事件处理。事件覆盖面对齐上游 handle_server_event 的可见行为。</summary>
     private void Handle(string payload)
     {
         JsonNode? node;
@@ -216,61 +201,207 @@ internal sealed class AudioClient : IAsyncDisposable
         }
 
         var type = node?["type"]?.GetValue<string>();
+        if (type is null)
+        {
+            return;
+        }
+
+        if (_options.PrintJson)
+        {
+            Console.WriteLine($"EVENT: {payload}");
+        }
+
+        // conversation_only 下隐藏部分转写不打进对话流（上游同款过滤）。
+        if (_conversationOnly &&
+            type is "speech_to_speech.input_audio_transcription.snapshot"
+                or "conversation.item.input_audio_transcription.delta")
+        {
+            return;
+        }
+
         switch (type)
         {
-            case "response.output_audio.delta":
+            case "session.created":
+                if (!_conversationOnly)
                 {
-                    var delta = node?["delta"]?.GetValue<string>();
-                    if (!string.IsNullOrEmpty(delta))
+                    Console.WriteLine("Connected.");
+                }
+
+                break;
+
+            case "session.updated":
+                if (_conversationOnly)
+                {
+                    Console.WriteLine("Ready — start speaking.");
+                }
+                else
+                {
+                    Console.WriteLine($"EVENT: {type}");
+                }
+
+                break;
+
+            case "input_audio_buffer.speech_started":
+                // 本地打断：立刻清掉还没播完的上一轮音频。
+                _playback.Clear();
+                if (!_conversationOnly)
+                {
+                    Console.WriteLine();
+                }
+
+                break;
+
+            // 上游对这三类显式 return：print_json 的完整 JSON 已在前面打过，
+            // 事件名行不重复出现（output_item 的生命周期属于诊断日志，不进对话流）。
+            case "input_audio_buffer.speech_stopped":
+            case "response.output_item.added":
+            case "response.output_item.done":
+                break;
+
+            case "speech_to_speech.input_audio_transcription.snapshot":
+                {
+                    var transcript = node?["transcript"]?.GetValue<string>();
+                    if (!string.IsNullOrWhiteSpace(transcript))
                     {
-                        var pcm = Convert.FromBase64String(delta);
-                        _playback.AddSamples(pcm, 0, pcm.Length);
+                        WriteConversation($"USER: {transcript.Trim()}", ConsoleColor.Yellow, newLine: false);
                     }
 
                     break;
                 }
-
-            case "input_audio_buffer.speech_started":
-                // 打断：立刻清空还没播完的上一轮音频
-                _playback.ClearBuffer();
-                break;
 
             case "conversation.item.input_audio_transcription.completed":
                 {
                     var transcript = node?["transcript"]?.GetValue<string>();
                     if (!string.IsNullOrWhiteSpace(transcript))
                     {
-                        WriteColored(transcript, ConsoleColor.Yellow);
+                        WriteConversation($"USER: {transcript.Trim()}", ConsoleColor.Yellow);
                     }
 
                     break;
                 }
+
+            case "conversation.item.input_audio_transcription.failed":
+                {
+                    var message = node?["error"]?["message"]?.GetValue<string>() ?? "Input audio transcription failed";
+                    WriteConversation($"ERROR: transcription_error: {message}", ConsoleColor.Red);
+                    break;
+                }
+
+            case "response.created":
+                if (!_conversationOnly)
+                {
+                    Console.WriteLine("ASSISTANT: <response started>");
+                }
+
+                break;
+
+            case "response.output_audio.delta":
+                {
+                    var delta = node?["delta"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(delta))
+                    {
+                        _playback.Append(Convert.FromBase64String(delta));
+                    }
+
+                    break;
+                }
+
+            case "response.output_audio.done":
+                _playback.Finish();
+                if (!_conversationOnly)
+                {
+                    Console.WriteLine("ASSISTANT: <audio done>");
+                }
+
+                break;
 
             case "response.output_audio_transcript.delta":
                 {
                     var delta = node?["delta"]?.GetValue<string>();
                     if (!string.IsNullOrEmpty(delta))
                     {
-                        WriteColored(delta, ConsoleColor.Green, newLine: false);
+                        WriteConversation("ASSISTANT: " + delta, ConsoleColor.Green, newLine: false);
                     }
 
                     break;
                 }
 
+            case "response.output_audio_transcript.done":
+                {
+                    var transcript = node?["transcript"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(transcript))
+                    {
+                        WriteConversation($"ASSISTANT: {transcript}", ConsoleColor.Green);
+                    }
+
+                    break;
+                }
+
+            case "response.function_call_arguments.done":
+                if (!_conversationOnly)
+                {
+                    var name = node?["name"]?.GetValue<string>();
+                    var callId = node?["call_id"]?.GetValue<string>();
+                    var arguments = node?["arguments"]?.GetValue<string>();
+                    Console.WriteLine($"TOOL: {name} call_id={callId} arguments={arguments}");
+                }
+
+                break;
+
             case "response.done":
-                Console.WriteLine();
+                {
+                    var status = node?["response"]?["status"]?.GetValue<string>();
+                    if (status == "cancelled")
+                    {
+                        _playback.Clear();
+                    }
+                    else
+                    {
+                        _playback.Finish();
+                    }
+
+                    if (_conversationOnly)
+                    {
+                        if (status is not null && status != "completed" && status != "cancelled")
+                        {
+                            WriteConversation($"ERROR: response {status}", ConsoleColor.Red);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"ASSISTANT: <response {status}>");
+                    }
+
+                    break;
+                }
+
+            case "output_audio_buffer.cleared":
+                _playback.Clear();
                 break;
 
             case "error":
                 {
-                    var message = node?["error"]?["message"]?.GetValue<string>();
-                    Console.Error.WriteLine($"server error: {message}");
+                    var errorType = node?["error"]?["type"]?.GetValue<string>() ?? "error";
+                    var message = node?["error"]?["message"]?.GetValue<string>() ?? "";
+                    WriteConversation($"ERROR: {errorType}: {message}", ConsoleColor.Red);
                     break;
                 }
+
+            default:
+                if (!_conversationOnly)
+                {
+                    Console.WriteLine($"EVENT: {type}");
+                }
+
+                break;
         }
     }
 
-    private static void WriteColored(string text, ConsoleColor color, bool newLine = true)
+    /// <summary>
+    /// 对话输出。conversation_only 走彩色控制台；诊断模式一律原样打印（与上游
+    /// <c>_FriendlyEventRenderer.print_conversation</c> 的两路一致）。
+    /// </summary>
+    private static void WriteConversation(string text, ConsoleColor color, bool newLine = true)
     {
         var previous = Console.ForegroundColor;
         try

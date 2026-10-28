@@ -7,6 +7,10 @@
     <Description>语音转语音管线命令行：serve / local / talk。</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="SpeechToSpeech.Tests" />
+  </ItemGroup>
+
   <ItemGroup Label="音频设备 I/O。3.x 起 NAudio 元包为单一 net9.0 包，WinMM + WASAPI 可在 net10.0 直接用；ALSA 后端需单独引用（元包不含，无 net9.0-linux TFM）。PortAudioSharp2 补 macOS（上游 sounddevice 的底层即 PortAudio，同引擎对齐；NuGet 包自带五平台原生库）。">
     <PackageReference Include="NAudio" Version="3.3.0" />
     <PackageReference Include="NAudio.Alsa" Version="3.3.0" />

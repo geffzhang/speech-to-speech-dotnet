@@ -1,4 +1,5 @@
 using System.Runtime.Versioning;
+using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.Alsa;
 
@@ -52,11 +53,12 @@ internal interface IAudioDeviceSet
     /// <summary>人类可读的后端名，用于启动时打印。</summary>
     string Name { get; }
 
-    /// <summary>建麦克风。调用方负责 <c>Dispose</c>。</summary>
-    IWaveIn CreateMicrophone(int sampleRate, int bufferMilliseconds);
+    /// <summary>建麦克风。调用方负责 <c>Dispose</c>。
+    /// <paramref name="deviceIndex"/> 是上游 sounddevice 语义的设备索引；null = 平台默认。</summary>
+    IWaveIn CreateMicrophone(int sampleRate, int bufferMilliseconds, int? deviceIndex);
 
     /// <summary>建扬声器。<paramref name="latencyMilliseconds"/> 是期望播放延迟，后端可忽略。</summary>
-    IWavePlayer CreateSpeaker(int latencyMilliseconds);
+    IWavePlayer CreateSpeaker(int latencyMilliseconds, int? deviceIndex);
 }
 
 [SupportedOSPlatform("windows")]
@@ -64,20 +66,40 @@ internal sealed class WindowsAudioDevices : IAudioDeviceSet
 {
     public string Name => "WASAPI / WinMM (Windows)";
 
-    public IWaveIn CreateMicrophone(int sampleRate, int bufferMilliseconds) =>
+    // WinMM 的设备索引与 sounddevice 的 MME 编号一致（都是 waveIn 枚举序）。
+    public IWaveIn CreateMicrophone(int sampleRate, int bufferMilliseconds, int? deviceIndex) =>
         new WaveIn
         {
             WaveFormat = new WaveFormat(sampleRate, 16, 1),
             BufferMilliseconds = bufferMilliseconds,
             NumberOfBuffers = 3,
+            DeviceNumber = deviceIndex ?? 0,
         };
 
-    public IWavePlayer CreateSpeaker(int latencyMilliseconds) =>
-        new WasapiPlayerBuilder()
+    // WASAPI 没有数字索引语义，按枚举序对应 sounddevice 的 WASAPI 编号；
+    // 越界在这里报出来，而不是静默回落默认设备（D034 纪律）。
+    public IWavePlayer CreateSpeaker(int latencyMilliseconds, int? deviceIndex)
+    {
+        var builder = new WasapiPlayerBuilder()
             .WithSharedMode()
             .WithEventSync()
-            .WithLatency(latencyMilliseconds)
-            .Build();
+            .WithLatency(latencyMilliseconds);
+
+        if (deviceIndex is { } index)
+        {
+            var enumerator = new MMDeviceEnumerator();
+            var endpoints = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
+            if (index < 0 || index >= endpoints.Count)
+            {
+                throw new ArgumentException(
+                    $"输出设备索引 {index} 超出范围（共 {endpoints.Count} 个活动渲染设备）。");
+            }
+
+            builder = builder.WithDevice(endpoints[index]);
+        }
+
+        return builder.Build();
+    }
 }
 
 [SupportedOSPlatform("linux")]
@@ -87,8 +109,17 @@ internal sealed class AlsaAudioDevices : IAudioDeviceSet
 
     // AlsaIn 的缓冲由 PeriodFrames × Periods 在 StartRecording 时决定，没有毫秒级开关，
     // 所以 bufferMilliseconds 在这里不参与；保留参数是为了让两侧签名一致。
-    public IWaveIn CreateMicrophone(int sampleRate, int bufferMilliseconds) =>
-        new AlsaIn { WaveFormat = new WaveFormat(sampleRate, 16, 1) };
+    //
+    // ALSA 没有数字索引语义；sounddevice 的索引对应 PortAudio 设备表。这里按 ALSA
+    // 惯例映射为 plughw:<n>,0（带格式转换层的hw设备），与上游 --input-device 的意图最接近。
+    public IWaveIn CreateMicrophone(int sampleRate, int bufferMilliseconds, int? deviceIndex)
+    {
+        var format = new WaveFormat(sampleRate, 16, 1);
+        return deviceIndex is { } index
+            ? new AlsaIn($"plughw:{index},0") { WaveFormat = format }
+            : new AlsaIn { WaveFormat = format };
+    }
 
-    public IWavePlayer CreateSpeaker(int latencyMilliseconds) => new AlsaOut();
+    public IWavePlayer CreateSpeaker(int latencyMilliseconds, int? deviceIndex) =>
+        deviceIndex is { } index ? new AlsaOut($"plughw:{index},0") : new AlsaOut();
 }
