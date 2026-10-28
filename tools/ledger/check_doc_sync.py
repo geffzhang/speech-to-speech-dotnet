@@ -21,6 +21,14 @@
 
 除了 porting/ 四本账，还扫仓库里各子目录的 README：第一次只扫 porting/ 时，
 `corpus/protocol/README.md` 里的「事件级覆盖 25/26」就漏掉了（实际早已 26/26）。
+
+2026-10-28 又补一类：**jsonl 条目自身的措辞**。C029/D008/D027 的教训是——accepted/resolved
+条目的自述（title/what/decision）也会过时：title 里残留「（gap）」状态标注、decision 里说
+「仍是缺口，单列 D0xx」而 D0xx 早已解决、test 里声称的用例数与实际不符。md 正文查不到这些，
+因为它们只存在于账本本身。分两级：
+  错误   title 带状态标注残留、条目 status=gap/accepted 而 decision 自称已解决/已补齐
+  复核   条目正文指向其他条目「仍是缺口/尚未解决」而被指向条目已 resolved——多半要补
+         「（现已 resolved）」时间限定；title 描述问题原貌（「未移植」配 resolved）是惯例，不报
 """
 
 from __future__ import annotations
@@ -98,6 +106,49 @@ def scan(doc_dir: Path, rows: dict[str, str], extras=()) -> list[tuple[str, int,
     return scan_files(paths, rows, root)
 
 
+# ── jsonl 自身自查 ────────────────────────────────────────────────
+
+# title 里不该出现的状态标注（状态在 status 字段里，title 再写一遍必然漂移）
+TITLE_STATUS = re.compile(r"（gap）|\(gap\)|（resolved）|\(resolved\)|（已解决）|（未解决）")
+# gap/accepted 条目的 decision 里不该自称已收口（那是翻 resolved 时才写的话）
+DONE_WORDS = re.compile(r"已解决|已补齐|已实现|已归位|已接线|已闭合")
+# 「指向其他条目说它仍是缺口」——被指向条目若已 resolved 就过时了
+POINTING = re.compile(r"(缺口|尚未解决|还没解决|未解决)[^。；]*?(单列|另列|另计|见)\s*([A-Z]\d{3})")
+POINTING2 = re.compile(r"(单列|另列|另计|见)\s*([A-Z]\d{3})[^。；]*?(仍是|尚未|还是)(缺口|gap|未解决)")
+
+
+def scan_jsonl(diff_path: Path) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]]]:
+    """返回 (错误, 复核)，元素为 (条目id, 级别说明, 摘录)。"""
+    errors: list[tuple[str, str, str]] = []
+    reviews: list[tuple[str, str, str]] = []
+    all_status = load_status(diff_path)
+    for line in io.open(diff_path, encoding="utf-8"):
+        line = line.strip()
+        if not line:
+            continue
+        row = json.loads(line)
+        rid, status = row["id"], row.get("status", "")
+        title = row.get("title", "")
+
+        if TITLE_STATUS.search(title):
+            errors.append((rid, "title 残留状态标注，状态应以 status 字段为准", title))
+
+        if status not in ("resolved",) and DONE_WORDS.search(row.get("decision", "")):
+            snippet = row["decision"]
+            cut = DONE_WORDS.search(snippet).start()
+            errors.append((rid, f"status={status} 但 decision 自称已收口（翻状态了吗？）", "…" + snippet[max(0, cut - 20):cut + 40] + "…"))
+
+        for field in ("what", "decision"):
+            text = row.get(field, "")
+            for pat in (POINTING, POINTING2):
+                for m in pat.finditer(text):
+                    ref = m.group(3) if pat is POINTING else m.group(2)
+                    if all_status.get(ref) == "resolved":
+                        s = max(0, m.start() - 10)
+                        reviews.append((rid, f"{field} 说 {ref} 仍是缺口，但它已 resolved（补「现已 resolved」限定？）", "…" + text[s:m.end() + 20] + "…"))
+    return errors, reviews
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -122,19 +173,30 @@ def main() -> int:
 
     rows = load_status(diff_path)
     problems = scan(doc_dir, rows, args.extra)
+    json_errors, json_reviews = scan_jsonl(diff_path)
 
-    if not problems:
-        print(f"文档措辞与账本状态一致（{len(rows)} 条差异）。")
+    if not problems and not json_errors and not json_reviews:
+        print(f"文档措辞与账本状态一致（{len(rows)} 条差异，含账本自述自查）。")
         return 0
 
-    print(f"发现 {len(problems)} 处账本与文档不一致：")
-    for name, lineno, tid, status, kind, text in problems:
-        print(f"  {name}:{lineno}  [{tid}] {kind}")
-        print(f"      {text if args.verbose else text[:110]}")
-    print()
-    print("改法：让文档跟上账本。若这句是历史叙述（描述当时的状态、现在仍要保留原话），")
-    print(f"在该行末尾加 {IGNORE_MARK}")
-    return 1 if args.strict else 0
+    failed = bool(problems or json_errors)
+    if problems:
+        print(f"发现 {len(problems)} 处账本与文档不一致：")
+        for name, lineno, tid, status, kind, text in problems:
+            print(f"  {name}:{lineno}  [{tid}] {kind}")
+            print(f"      {text if args.verbose else text[:110]}")
+        print()
+    for rid, kind, text in json_errors:
+        print(f"  [错误] [{rid}] {kind}")
+        print(f"      {text}")
+    for rid, kind, text in json_reviews:
+        print(f"  [复核] [{rid}] {kind}")
+        print(f"      {text}")
+    if problems or json_errors:
+        print()
+        print("改法：让文档跟上账本。若这句是历史叙述（描述当时的状态、现在仍要保留原话），")
+        print(f"在该行末尾加 {IGNORE_MARK}")
+    return 1 if args.strict and failed else 0
 
 
 if __name__ == "__main__":
