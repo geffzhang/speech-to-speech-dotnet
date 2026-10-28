@@ -25,7 +25,7 @@ fake 验不了、必须在真实端点上验的五项：
 
 | 路径 | 需要 | 覆盖范围 | 适用 |
 |---|---|---|---|
-| A. 自建 vLLM Realtime | NVIDIA GPU ≥16 GB VRAM（BF16 权重），Linux/WSL2/Docker | 全部 5 项 | 有 GPU 时首选 |
+| A. 自建 vLLM Realtime | NVIDIA GPU：**约 4 GB**（Qwen3-ASR-0.6B）/ ≥16 GB（Voxtral），Linux/WSL2/Docker | 全部 5 项 | 有 GPU 时首选 |
 | B. 容器镜像 | 同上 GPU，省去配环境 | 同 A | 不想配 CUDA 环境 |
 | C. OpenAI hosted | `OPENAI_API_KEY`，无 GPU | 1/2/3/5（缺 vLLM 特有的第 4 项） | **当前无 GPU 时的推荐起点** |
 
@@ -39,25 +39,47 @@ discard 断连兜底一项留待 GPU 到位补测。
 ```bash
 uv pip install -U vllm --torch-backend=auto \
   --extra-index-url https://wheels.vllm.ai/nightly/cu130
-uv pip install "mistral-common[audio]"
 ```
 
-模型：`mistralai/Voxtral-Mini-4B-Realtime-2602`（约 2.5 GB 下载）。
-注意上游文档点名的默认 `Qwen/Qwen3-ASR-1.7B` **不**支持 Realtime 协议。
 国内下载设 `HF_ENDPOINT` 镜像。
 
-### 3.2 启动
+### 3.2 模型选型与启动
+
+vLLM 官方 supported models 的 **Realtime Transcription** 表只有两个架构
+（其余 ASR 模型如 Qwen3-ASR-1.7B / Whisper 只支持 `/v1/audio/transcriptions`
+非流式端点，**不**挂 `/v1/realtime`）：
+
+| 架构 | 模型 | 显存 | serve 注意 |
+|---|---|---|---|
+| `Qwen3ASRRealtimeGeneration` | `Qwen/Qwen3-ASR-0.6B` | **约 4 GB 即可**（0.6B BF16 ≈ 1.2 GB 权重 + KV/激活） | 架构**不能从 config.json 自动识别**，必须 `--hf-overrides '{"architectures":["Qwen3ASRRealtimeGeneration"]}'` |
+| `VoxtralRealtimeGeneration` | `mistralai/Voxtral-Mini-4B-Realtime-2602` | ≥16 GB（BF16 4B） | 需 `mistral-common[audio]` + `--tokenizer-mode mistral` |
+
+**联调首选 Qwen3-ASR-0.6B**——门槛低一个量级，且中文正是它的强项（30 语种 + 22 中文方言）：
 
 ```bash
+VLLM_DISABLE_COMPILE_CACHE=1 vllm serve Qwen/Qwen3-ASR-0.6B \
+  --hf-overrides '{"architectures":["Qwen3ASRRealtimeGeneration"]}' \
+  --gpu-memory-utilization 0.85 --host 0.0.0.0 --port 8000
+```
+
+Voxtral 路径（对照/英文场景）：
+
+```bash
+uv pip install "mistral-common[audio]"
 VLLM_DISABLE_COMPILE_CACHE=1 vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 \
   --compilation_config '{"cudagraph_mode": "PIECEWISE"}' \
   --tokenizer-mode mistral --config-format mistral --load-format mistral \
   --gpu-memory-utilization 0.85 --host 0.0.0.0 --port 8000
 ```
 
-启动成功判据：日志出现 `Route: /v1/realtime`；
+启动成功判据（两模型相同）：日志出现 `Route: /v1/realtime`；
 `curl http://localhost:8000/v1/models` 返回 served 模型名——
 **Realtime 协议要求 model 标识与 `/v1/models` 一致**（含 serve 时的自定义名）。
+
+> 与上游账面的一个偏差要记住：上游 `vllm_realtime_stt_model` 默认值是
+> `Qwen/Qwen3-ASR-1.7B`，但 1.7B 在 vLLM 里只有非流式架构——**上游这个默认值
+> 在 Realtime 后端下本身就不能直接用**（必须 serve 了对应 id 才行，上游文档也是
+> 这么说的）。本实现默认值同上游；联调时显式传 `Qwen/Qwen3-ASR-0.6B` 即可。
 
 ### 3.3 方案 B：容器替代 3.1/3.2
 
@@ -69,6 +91,9 @@ docker run --rm --gpus all --shm-size 4g -p 8000:8000 \
   --tokenizer-mode mistral --config-format mistral --load-format mistral \
   --gpu-memory-utilization 0.85 --host 0.0.0.0 --port 8000
 ```
+
+跑 Qwen3-ASR-0.6B 时用通用 vLLM 镜像（或同一镜像），`--model` 换掉并带上
+§3.2 的 `--hf-overrides` 即可，`--tokenizer-mode mistral` 三件套不要带。
 
 ## 4. 方案 C：OpenAI hosted（无 GPU）
 
@@ -105,7 +130,7 @@ speech-to-speech local \
 |---|---|---|
 | `vllm_realtime_stt_base_url` | `vllm_realtime_base_url` | `ws://localhost:8000/v1` |
 | `vllm_realtime_stt_api_key` | `vllm_realtime_api_key` | 无 |
-| `vllm_realtime_stt_model` | `vllm_realtime_model` | `Qwen/Qwen3-ASR-1.7B`（serve 它才有效） |
+| `vllm_realtime_stt_model` | `vllm_realtime_model` | `Qwen/Qwen3-ASR-1.7B`（上游默认；1.7B 无 Realtime 架构，联调实际传 `Qwen/Qwen3-ASR-0.6B`） |
 | `vllm_realtime_stt_audio_sample_rate` | `vllm_realtime_sample_rate` | 16000 |
 | `vllm_realtime_stt_connect_timeout` | `vllm_realtime_connect_timeout` | 10.0 s |
 | `vllm_realtime_stt_final_timeout` | `vllm_realtime_final_timeout` | 60.0 s |
