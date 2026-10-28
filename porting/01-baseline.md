@@ -209,8 +209,8 @@
 |---|---|---|
 | `list-backends` 子命令 | 是（`SpeechToSpeech.Cli`） | 后端注册表三族 15/5/12、可用性原因、未知名字报错 |
 | `serve` 子命令 | 是 | Kestrel + `/v1/realtime` + `/healthz`，已交互跑通 |
-| `local` 子命令 | 是（编译通过） | 进程内四段串联；**未端到端实跑**（缺模型文件） |
-| `talk` 子命令 | 是（编译通过） | WebSocket 客户端 + NAudio 设备 I/O。平台矩阵：Windows 走 WASAPI 播放 + WinMM 录制（已实跑，设备创建成功）；Linux 走 ALSA（仅编译期校验，未在真实设备上跑）；macOS 启动即报 `PlatformNotSupportedException` |
+| `local` 子命令 | 是 | 进程内四段串联。参数族与协议面对齐 D035（2026-10-28）：`--local-audio-*` 全套接线、`session.update` 走服务端原生速率并订阅转写快照；真跑证据见 03-acceptance「talk 客户端真跑」。仍需真人对麦克风说话的一轮听感验证 |
+| `talk` 子命令 | 是 | WebSocket 客户端 + NAudio 设备 I/O，参数族与协议面已按 D035 对齐（2026-10-28）。平台矩阵：Windows 走 WASAPI 播放 + WinMM 录制（已真跑：连接 + 握手 + VAD commit + 转写完成 + response 创建）；Linux 走 ALSA（仅编译期校验，未在真实设备上跑；`--input-device` 映射为 `plughw:<n>,0`）；macOS 走 PortAudio（设备索引直通） |
 | `tools/TextProbe` | 是（`/tools/` 目录） | 文本层探针，为 `corpus/text/` 输出 `unspeakable` / `markdown` / `sentences` 三视图 |
 | `tools/LanguageProbe` | 是（`/tools/` 目录） | 语言层探针，按片驱动 `AssistantLanguageProbe`，输出判出语言与每片后的窗口 |
 | `tools/ProtocolProbe` | 是（`/tools/` 目录） | 协议层探针，走产品序列化入口构造 26 类服务端事件 |
@@ -230,7 +230,7 @@
 | 音频层差分语料为空 | 模型推理受浮点累加顺序影响，无法逐字节比对 | 中——只能靠采样率/段数/时长误差带间接验证 | 用固定音频跑一遍四段，比段落数、总时长与事件序列，不比样本值 |
 | 协议层只比单事件形状，不比顺序 | 语料是「一事件一例」，没有覆盖一整轮的上行/下行时序 | 中——事件顺序错乱（例如 delta 先于 item.added）测不出来 | 复用上游 `realtime_contract.py` 的契约检查器，重放同一事件序列 |
 | 轮次状态机的接合点未实测 | 状态机自身与上游逐值一致，但 `VadHandler` 何时调 `SpeechCandidateStarted` / `SegmentDiscarded` 没有真跑验证 | 中——接错时机仍会退化成「卡住」或「停顿即两轮」 | 真跑一轮带打断的对话，对照上游日志的轮次序列 |
-| `local` / `talk` 未实跑 | 缺 Silero/Whisper/Qwen3-TTS 模型文件与麦克风 | **高**——全链路首次真跑可能暴露队列时序问题 | 备齐模型后单机跑一轮，录下音频与事件时序 |
+| `local` / `talk` 听感实跑 | 参数族、协议面与真跑握手已闭合（D035，2026-10-28）：`serve` + `talk --print-json` 真跑走完 VAD commit → 转写完成 → response 创建；**剩下的只有真人对着麦克风说话的听感**（音色、回声、设备延迟） | 低——队列时序、协议握手与转写链路均已实测 | 找时间人对麦克风说一轮，顺带验证 `--local-audio-*` 参数 |
 | 12 个后端无运行时 | D010 | 低——`BackendUnavailableException` 显式报错，不静默降级 | 按需逐步补齐 |
 | 跨平台音频 I/O | E001 已解决 —— Windows（WASAPI+WinMM）/Linux（ALSA）/macOS（PortAudioSharp2 1.0.6，与上游 sounddevice 同引擎）三后端齐备 | 低 —— Linux ALSA 与 macOS 路径均未在真实设备上验证；服务端 `serve` 不受影响 | Windows 已实跑设备创建；Linux 需在装 `libasound.so.2` 的机器上跑一轮；macOS 需真机跑一轮 talk |
 | 惰性加载的模型路径 | E003 运行期报错 | 低——首次合成才失败，非启动即失败 | 可加 `--check-models` 预检 |

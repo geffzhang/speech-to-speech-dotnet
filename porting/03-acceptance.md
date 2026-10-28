@@ -44,8 +44,8 @@
 
 | 测试 | 跳过原因 | 风险 |
 |---|---|---|
-| `local` 全链路 | 未写成测试，只写成 CLI 子命令。`serve` 已用脚本化客户端实跑（含两轮与打断），`local` 子命令本身未跑 | 已收敛——`serve` 真跑暴露的 C020/C023/C024 修复后，剩余风险与 `local` 共享同一套管线 |
-| `talk` 端到端 | 需麦克风/扬声器。TTS 音频已在真链路上合成并经 `output_audio.delta` 流式发出（2026-10-26），`tts_ttfa_s` / `e2e_s` 落地；剩下的是真实设备听感（音色、全双工回声） | 中——仅 Windows 实测 |
+| `local` 全链路 | 客户端参数族、`session.update` 协议面与真跑已闭合（D035，2026-10-28，见「talk 客户端真跑」一节）；`local` 与 `talk` 共用同一 `AudioClient` | 已收敛——与 `serve` 真跑共享同一套管线，剩听的只有真人说话的听感 |
+| `talk` 端到端 | 2026-10-28 真跑已走完握手与转写链路（见下）；剩下的是真实设备听感（音色、全双工回声） | 低——仅 Windows 实测 |
 | 上游 2,082 例中的后端专属部分 | 不移植（见 `01-baseline.md` §1.2） | 低——统一契约已锁 |
 
 ## 公开 API 审计
@@ -203,7 +203,7 @@
       实跑中修掉两处打包缺陷：`ENTRYPOINT` 用错程序集名（`AssemblyName` 是 `speech-to-speech`）；compose 的 `llm_base_url` 带 `/v1` 后缀会拼成 `/v1/v1/chat/completions`。
       NuGet 发布不在范围（行为等价重写，无对外包面）
 - [ ] **跨平台**（Windows / Linux / macOS）—— 代码路径齐备：`serve` 纯托管代码，理论跨平台；`talk`/`local` 音频后端三平台均接入——Windows（WASAPI + WinMM）、Linux（ALSA）、macOS（PortAudio，PortAudioSharp2 1.0.6，E001 已解决）。Windows 已实跑设备创建；**Linux 与 macOS 未在真实设备上跑过**（绑定冒烟 3 例通过）
-- [ ] **带真实音频设备的一轮对话** —— 仍未做：`local`/`talk` 需要真人对着麦克风说话，本轮用 `serve` + 脚本化客户端替代，验证的是同一套协议与管线
+- [ ] **带真实音频设备的一轮对话** —— 参数族、协议面与真跑握手已闭合（D035，2026-10-28）：`serve` + `talk --print-json` 真跑走完麦克风 16k 直通上行 → VAD commit（`audio_end_ms=4736`）→ 转写完成 → `response.created` → transcript delta，全程无 error 事件。**仍未做的只剩真人对着麦克风说话的听感验证**
 - [x] **跨传输** —— WebSocket 与 WebRTC 双通路（D003 **已解决 2026-10-27**）。`SessionTransport` 抽象分出
       `send_events` / `send_audio_chunk` / `discard_pending_audio` / `close` 四面，WebSocket 承接原 `socket` 路径；
       WebRTC 侧 RTP 音频走 SIPSorcery `WebRtcSession`（Opus 48 kHz，Concentus 编解码），事件走 `oai-events` datachannel，
@@ -228,7 +228,7 @@
 | 函数调用未进 `response.output`（D023，**已解决 2026-10-27**） | 输出项状态机与 `ResponseOutput.Merge` 合并排序已就位，协议语料 39/39、真跑回归通过；**未经真实工具链路验证**——本实现的测试 LLM（qwen35）没有稳定的工具调用产出，`AssistantToolCallReadyEvent` 端到端只由假后端走过 | 需要一个会发工具调用的 LLM 后端（如 OpenAI 兼容端）跑一轮真链路 |
 | ~~带外响应未实现（D024）~~ **已解决 2026-10-27** | 侧问会污染会话历史 | 四处一起补齐：metadata 不挂工具输入、不建时延账、输出不写回历史（哨兵词+item.delete 双证）、`conversation_id` 报 null；协议语料 40/40，真跑 `oob_leak_probe.py` 闭环 |
 | 每响应音色覆盖未实测（D017 已补） | 代码路径已打通（`ResolveVoice` → `TtsInput.Voice` → 后端 `Speaker`），但只由假后端验证过「值确实传到了」 | 低——真实 Qwen3-TTS 对不支持的音色会忽略，这层校验在模型侧；缺的是端到端听感验证 |
-| `local` / `talk` 未实跑（真实音频设备） | 队列时序与背压已经 `serve` + 脚本化客户端验证过两轮与打断；剩下的是真实全双工声学场景（回声、设备延迟） | 带麦克风/扬声器跑 `local`，听感验证 TTS 音色（顺带闭合 D017 的端到端验证） |
+| `local` / `talk` 听感实跑 | 客户端参数族与协议面已对齐（D035 resolved 2026-10-28），`talk --print-json` 真跑走完 VAD commit → 转写 → response 创建；剩下的是真实全双工声学场景（回声、设备延迟） | 带麦克风/扬声器说一轮，听感验证 TTS 音色（顺带闭合 D017 的端到端验证） |
 | 接合点的时序与真实后端的交互 | `VadHandler` 与真实 VAD 后端的两轮/打断交互已用脚本化客户端实跑（C023/C024 由此暴露并修复）；剩余的是真实麦克风/扬声器下的全双工行为（回声、半双工时序） | 低——协议与管线层面已闭合，剩下的是声学环境问题，不影响行为等价判定 |
 | Smart Turn 判定的「incomplete」路径未在真实音频上触发 | 判定器概率已与参照链路逐值对齐（合成音频 <1e-4），但手头的测试音频截断处恰好语义完整，参照侧也判 complete | 低——incomplete 之后的决策（推迟 600ms、max_wait 2000ms、复开）由 `corpus/smart-turn` 13 条语料与 `TurnEndTiming` 单测锁定；真实对话中自然会出现 |
 | 实时转写（D005 **已解决**） | `openai-realtime` / `vllm-realtime` 两个 STT 后端已实现——wire dialect（六方法 + 端点 URL/setup 校验逐条对齐）、worker 的命令队列/代际/毒轮/partial 发布/握手、VAD 侧 `StartTurn`/`AppendAudio`/`CommitBoundary`/`DiscardUtterance` 全部接线，`StreamingSttProtocolTests` 28 + `StreamingSttSessionTests` 14 + `StreamingSttBackendTests` 5 | 剩下的是**真实服务端联调**（手头没有这两家的流式端点，账本只覆盖到 fake WS 表征）；失败仍走 `BackendUnavailableException`，不静默降级 |
@@ -799,3 +799,37 @@ D033 之前 `ISpeakerEmbedding` 只有接缝：分离能给出「谁在什么时
 恢复后 482/482 全过。
 
 账本动作：`C029` 由 accepted 翻 **resolved**（差异账 73 条：resolved 57 / accepted 16 / gap 0）。
+
+### talk 客户端真跑（2026-10-28，D035 收口）
+
+**发现。** 上一轮收口 C029 后巡检「还没验过的部分」时发现：`talk`/`local` 的音频客户端是 367 行精简版，
+而上游 `audio_client.py` 有 1237 行。差距不在「能不能连」，在**参数与协议面**：
+上游参数族（`--send-rate`/`--recv-rate`/`--playback-buffer-ms`/`--chunk-size`/`--input-device`/
+`--output-device`/`--voice`/`--instructions`/`--print-json`/`--verbose`/`--block-mic-during-playback`，
+local 侧带 `--local-audio-*` 前缀）本实现一个都没解析——CommandLine 接受任意 `--xxx` 后无人消费，
+比 D034「接受却忽略」还要早一步；`session.update` 硬编码双向 24000 并无条件声明 format、缺
+`extensions`、缺 `interrupt_response`，麦克风 16k 被强制上采样 24k 再发（上游默认 16k 直通）。
+`extensions` 缺省 false 是真功能缺失：服务端只给订阅者发实时转写快照，不订阅 local/talk 下用户
+永远看不到逐字转写。
+
+**修法。** 新增 `RealtimeAudioClientOptions`（含 `BuildSessionUpdate` 静态构造，16k 省略 format /
+24k 显式 / 其余报错，与上游 `maybe_pcm_format` 同口径）与 `PlaybackBuffer`（首包攒满才开播、
+`finish()` 放行短响应、欠读回 idle、150ms 活动窗，逐条对齐上游）；麦克风按 send_rate 直通不再重采样；
+设备索引贯通三后端（WinMM `DeviceNumber` / WASAPI `EnumerateAudioEndPoints` 枚举 / ALSA 映射
+`plughw:<n>,0` / PortAudio 索引直通），越界显式报错不静默回落；参数装配提成 `FromTalkArgs` /
+`FromLocalArgs` 静态工厂（可测），local 的 playback_buffer_ms 缺省按 TTS 后端分支 openai→196 否则 0。
+留待并记 accepted：`--tool-module`（import 语义无 C# 等价物）、箭头切 voice、renderer 原地刷新细节、
+连接重试 30s。
+
+**验证。** 单测 21 例（协议形状 10 + 播放缓冲 11 + 参数装配含在协议 10 例内），旧实现上因类型不存在
+编译失败；全量 503/503。真跑：真权重 serve + `talk --print-json` 12 秒——麦克风环境音经 16k 直通
+上行被 VAD commit（`audio_end_ms=4736`）→ 转写完成 → `response.created` → transcript delta，
+`session.created`/`session.updated` 均到达、全程零 error 事件：新 `session.update` 被服务端完整接受，
+快照订阅链路生效。
+
+**两个环境事实，下次真跑别再踩：**
+1. `talk` 真跑必须带全模型路径起 serve——缺 VAD 模型目录时服务端在**连接构建期**即报
+   `BackendUnavailableException`，`session.created` 都不会发出（E003 行为，客户端侧表现为
+   「连上了但什么都收不到」，很像客户端 bug）。
+2. `timeout` 杀 Windows 进程不彻底：残留的 talk/serve 会锁住 `speech-to-speech.exe`，
+   下次构建 MSB3027。跑完先确认进程清干净再 build。
