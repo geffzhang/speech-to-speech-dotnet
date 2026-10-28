@@ -442,13 +442,15 @@ public sealed class AssistantItemLifecycleTests
     }
 
     [Fact]
-    public void InputAudioBufferCommitted_OmitsPreviousItemIdForFirstItem()
+    public void InputAudioBufferCommitted_WritesPreviousItemIdNullForFirstItem()
     {
         var first = ServerEvent.InputAudioBufferCommitted("item_1", null);
         var chained = ServerEvent.InputAudioBufferCommitted("item_2", "item_1");
 
-        // 首项必须整字段省略，给 null 会让客户端以为链断在此处
-        Assert.False(first.ContainsKey("previous_item_id"));
+        // 键必须始终存在：首个项为 null，与上游 event.model_dump() 不 exclude_none 对齐。
+        // 省略键会让按 OpenAI 形状建模的客户端（SIPSorcery DTO 的 required 属性）反序列化失败。
+        Assert.True(first.ContainsKey("previous_item_id"));
+        Assert.True(first["previous_item_id"] is null);
         Assert.Equal("item_1", chained["previous_item_id"]!.GetValue<string>());
     }
 

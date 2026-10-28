@@ -201,17 +201,15 @@ public static class ServerEvent
     /// </summary>
     public static JsonObject InputAudioBufferCommitted(string itemId, string? previousItemId)
     {
+        // previous_item_id 键始终写（首个项为 null），与上游 model_dump() 不 exclude_none 对齐；
+        // 省略会让按 OpenAI 形状建模的客户端（如 SIPSorcery DTO 的 required 属性）反序列化失败。
         var payload = new JsonObject
         {
             ["type"] = EventNames.InputAudioBufferCommitted,
             ["event_id"] = NewEventId(),
             ["item_id"] = itemId,
+            ["previous_item_id"] = previousItemId,
         };
-
-        if (previousItemId is not null)
-        {
-            payload["previous_item_id"] = previousItemId;
-        }
 
         return payload;
     }
@@ -285,17 +283,14 @@ public static class ServerEvent
             ["content"] = content ?? new JsonArray(),
         };
 
+        // previous_item_id 键始终写（首个项为 null），见 InputAudioBufferCommitted 的同口径注释。
         var payload = new JsonObject
         {
             ["type"] = EventNames.ConversationItemCreated,
             ["event_id"] = NewEventId(),
             ["item"] = item,
+            ["previous_item_id"] = previousItemId,
         };
-
-        if (previousItemId is not null)
-        {
-            payload["previous_item_id"] = previousItemId;
-        }
 
         return payload;
     }
