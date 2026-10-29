@@ -4,21 +4,45 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 models_dir="$script_dir/models"
 manifest="$script_dir/tools/models/models.tsv"
+groups_csv=
+groups_set=false
 
 fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 usage() {
-    printf 'Usage: bash download-models.sh [--models-dir DIR] [--manifest TSV]\n'
+    printf 'Usage: bash download-models.sh [--models-dir DIR] [--manifest TSV] [--groups LIST]\n'
 }
 while (($#)); do
     case "$1" in
-        --models-dir|--manifest)
+        --models-dir|--manifest|--groups)
             (($# >= 2)) || fail "Missing value for $1"
-            if [[ "$1" == --models-dir ]]; then models_dir="$2"; else manifest="$2"; fi
+            case "$1" in
+                --models-dir) models_dir="$2" ;;
+                --manifest) manifest="$2" ;;
+                --groups) groups_csv="$2"; groups_set=true ;;
+            esac
             shift 2 ;;
         --help|-h) usage; exit 0 ;;
         *) usage >&2; fail "Unknown argument: $1" ;;
     esac
 done
+
+groups=()
+if [[ "$groups_set" == true ]]; then
+    [[ -n "$groups_csv" && "$groups_csv" != ,* && "$groups_csv" != *, && "$groups_csv" != *,,* ]] ||
+        fail "Invalid group filter: $groups_csv"
+    IFS=',' read -r -a groups <<< "$groups_csv"
+    checked_groups=()
+    for group in "${groups[@]}"; do
+        case "$group" in
+            vad|whisper|llm|tts|smart-turn) ;;
+            *) fail "Invalid group filter: $group" ;;
+        esac
+        for checked in "${checked_groups[@]+"${checked_groups[@]}"}"; do
+            [[ "$group" != "$checked" ]] || fail "Invalid group filter: $group"
+        done
+        checked_groups+=("$group")
+    done
+fi
 
 command -v curl >/dev/null || fail "curl is required"
 if command -v sha256sum >/dev/null; then
@@ -52,6 +76,33 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     sizes+=("$size") paths+=("$relative") urls+=("$url") keys+=("$key")
 done < "$manifest"
 ((${#paths[@]} > 0)) || fail "Empty model manifest"
+
+if [[ "$groups_set" == true ]]; then
+    for group in "${groups[@]}"; do
+        found=false
+        for relative in "${paths[@]}"; do
+            if [[ "${relative%%/*}" == "$group" ]]; then found=true; break; fi
+        done
+        [[ "$found" == true ]] || fail "Invalid group filter: no manifest entries for $group"
+    done
+
+    filtered_hashes=() filtered_sizes=() filtered_paths=() filtered_urls=()
+    for ((i = 0; i < ${#paths[@]}; i++)); do
+        for group in "${groups[@]}"; do
+            if [[ "${paths[$i]%%/*}" == "$group" ]]; then
+                filtered_hashes+=("${hashes[$i]}")
+                filtered_sizes+=("${sizes[$i]}")
+                filtered_paths+=("${paths[$i]}")
+                filtered_urls+=("${urls[$i]}")
+                break
+            fi
+        done
+    done
+    hashes=("${filtered_hashes[@]}")
+    sizes=("${filtered_sizes[@]}")
+    paths=("${filtered_paths[@]}")
+    urls=("${filtered_urls[@]}")
+fi
 
 file_size() { wc -c < "$1" | tr -d '[:space:]'; }
 verified() {

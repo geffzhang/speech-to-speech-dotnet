@@ -10,7 +10,8 @@ Download and verify the default local pipeline models.
 [CmdletBinding()]
 param(
     [string] $ModelsDir = (Join-Path $PSScriptRoot 'models'),
-    [string] $Manifest = (Join-Path $PSScriptRoot 'tools\models\models.tsv')
+    [string] $Manifest = (Join-Path $PSScriptRoot 'tools\models\models.tsv'),
+    [string] $Groups
 )
 
 Set-StrictMode -Version Latest
@@ -51,6 +52,29 @@ try {
             $parent = $parent.Substring(0, $parent.LastIndexOf('/'))
             if ($seen.ContainsKey($parent)) { throw "Conflicting manifest path: $parent" }
         }
+    }
+
+    if ($PSBoundParameters.ContainsKey('Groups')) {
+        $allowedGroups = @('vad', 'whisper', 'llm', 'tts', 'smart-turn')
+        $selectedGroups = $Groups.Split(',')
+        $groupSet = @{}
+        foreach ($group in $selectedGroups) {
+            if ([string]::IsNullOrWhiteSpace($group) -or
+                $group -notin $allowedGroups -or $groupSet.ContainsKey($group)) {
+                throw "Invalid group filter: $group"
+            }
+            $groupSet[$group] = $true
+        }
+
+        $filteredEntries = @($entries | Where-Object {
+            $groupSet.ContainsKey($_.Path.Split('/')[0])
+        })
+        foreach ($group in $selectedGroups) {
+            if (-not ($filteredEntries | Where-Object { $_.Path.StartsWith("$group/") })) {
+                throw "Invalid group filter: no manifest entries for $group"
+            }
+        }
+        $entries = $filteredEntries
     }
 
     foreach ($entry in $entries) {

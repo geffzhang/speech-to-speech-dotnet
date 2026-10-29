@@ -16,7 +16,7 @@ When `local` uses a built-in local backend whose pinned model files are missing,
 ## Constraints and implementation calls
 
 - The default directory is `models/` under the repository root; the existing scripts receive it explicitly so invocation does not depend on their process working directory.
-- Extend both scripts with an optional model-group filter (`vad`, `whisper`, `llm`, `tts`, `smart-turn`); no filter retains the current all-model behavior. `local` selects groups for its active built-in local backends. Missing files in selected groups are downloaded; verified files are skipped.
+- Extend both scripts with an optional model-group filter (`vad`, `whisper`, `llm`, `tts`, `smart-turn`); no filter retains the current all-model behavior. Empty, duplicate, unknown, or manifest-empty groups fail before downloads. `local` selects groups for its active built-in local backends. Missing files in selected groups are downloaded; verified files are skipped.
 - Before building the backend context or starting Kestrel, `local` resolves its effective model paths, invokes `download-models.ps1` on Windows or `download-models.sh` through Bash elsewhere if pinned default files are missing, waits for completion, and then validates the resulting paths.
 - Explicit custom model paths remain user-managed. If one is missing, `local` fails before listening and reports the missing path plus the manual download command; it does not silently substitute default weights.
 - Script lookup uses the repository checkout. If the matching script or manifest is unavailable, fail clearly before listening rather than falling back to an unverified download.

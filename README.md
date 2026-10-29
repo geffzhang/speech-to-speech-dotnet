@@ -77,6 +77,18 @@ bash ./download-models.sh
 完整 URL、固定提交版本、字节数与 SHA-256 在
 [`tools/models/models.tsv`](tools/models/models.tsv)，不在运行时解析 `main` / `master`：
 
+手动下载时可按模型组筛选（`local` 启动时也会使用此筛选，只准备本地后端需要的组）：
+
+```powershell
+.\download-models.ps1 -Groups vad,whisper
+```
+
+```bash
+bash ./download-models.sh --groups vad,whisper
+```
+
+可用组为 `vad`、`whisper`、`llm`、`tts`、`smart-turn`；省略筛选仍下载全部五组。
+
 | 段 | 参数 | 下载目标（相对 `models/`） | 来源 |
 |---|---|---|---|
 | VAD | `--vad_model_dir` | `vad/silero_vad.onnx`（v5） | [Silero v5 ONNX](https://huggingface.co/runanywhere/silero-vad-v5) |
