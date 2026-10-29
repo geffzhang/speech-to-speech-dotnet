@@ -108,5 +108,22 @@ class DockerComposeTests(unittest.TestCase):
         self.assertNotIn("host.docker.internal:8080", args)
 
 
+class DockerReadmeTests(unittest.TestCase):
+    def test_docker_section_documents_automatic_model_setup(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        docker_section = readme.split("### Docker\n", maxsplit=1)[1].split(
+            "\n---", maxsplit=1
+        )[0]
+        normalized = docker_section.casefold()
+
+        self.assertIn("docker compose up --build", docker_section)
+        self.assertIn("6.6", docker_section)
+        self.assertIn("models", normalized)
+        self.assertIn("tensorsharp", normalized)
+        self.assertIn("./cache/models/", docker_section)
+        self.assertIn("tools/models/models.tsv", docker_section)
+        self.assertIn("compose", normalized)
+
+
 if __name__ == "__main__":
     unittest.main()

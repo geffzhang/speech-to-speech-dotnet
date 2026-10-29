@@ -476,11 +476,17 @@ python tools/smoke/demo_server_parity.py                                   # dem
 
 ### Docker
 
+See the [Docker guide](docs/docker.md) for automatic model setup, persistent
+storage, custom mounts, and direct `docker run` usage.
+
 ```bash
-# 准备容器挂载的模型目录（PowerShell: .\download-models.ps1 -ModelsDir .\cache\models）
-bash ./download-models.sh --models-dir ./cache/models
 docker compose up --build
 ```
+
+首次启动会自动下载并校验默认五组模型（约 **6.6 GB**），写入 Compose 的 `models` 命名卷后才启动服务。
+后续启动会复用卷中已校验的文件；无需预先创建 `./cache/models/`，也无需单独运行宿主机 LLM 服务。
+Compose 默认使用本地 TensorSharp GGUF 模型。模型权重仍受各自上游许可约束；下载地址和校验值来自
+[`tools/models/models.tsv`](tools/models/models.tsv)。
 
 容器里没有音频设备，`serve` 模式（客户端经 WebSocket 推流）是唯一用法。
 

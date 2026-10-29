@@ -29,6 +29,8 @@ scripts/
 .github/
 tests/
 tools/*/
+!tools/models/
+!tools/models/models.tsv
 
 # 例外：探针工程本身在 slnx 里，restore 需要
 !tools/ApiProbe/

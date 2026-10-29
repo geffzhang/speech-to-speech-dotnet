@@ -7,8 +7,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # 先拷工程文件还原依赖——源码变更时不打翻 NuGet 缓存层。
-# 只对 Cli 还原（slnx 还会拉 tests/tools，构建上下文里没有）：publish Cli
-# 会传递还原全部 ProjectReference。
+# Cli 的引用图包含多组后端；恢复其 csproj 会传递还原所需的 ProjectReference，
+# 但不会恢复同一目录下未被 Cli 引用的可选工程。
 COPY Directory.Build.props ./
 COPY ["src/SpeechToSpeech.Cli/SpeechToSpeech.Cli.csproj", "src/SpeechToSpeech.Cli/"]
 COPY ["src/SpeechToSpeech.Core/SpeechToSpeech.Core.csproj", "src/SpeechToSpeech.Core/"]
@@ -19,6 +19,11 @@ COPY ["src/SpeechToSpeech.Backends.OpenAiCompatible/SpeechToSpeech.Backends.Open
 COPY ["src/SpeechToSpeech.Backends.QwenTts/SpeechToSpeech.Backends.QwenTts.csproj", "src/SpeechToSpeech.Backends.QwenTts/"]
 COPY ["src/SpeechToSpeech.Backends.SmartTurn/SpeechToSpeech.Backends.SmartTurn.csproj", "src/SpeechToSpeech.Backends.SmartTurn/"]
 COPY ["src/SpeechToSpeech.Backends.TensorSharp/SpeechToSpeech.Backends.TensorSharp.csproj", "src/SpeechToSpeech.Backends.TensorSharp/"]
+COPY ["src/SpeechToSpeech.Audio.Diarization/SpeechToSpeech.Audio.Diarization.csproj", "src/SpeechToSpeech.Audio.Diarization/"]
+COPY ["src/SpeechToSpeech.Transport.WebRtc/SpeechToSpeech.Transport.WebRtc.csproj", "src/SpeechToSpeech.Transport.WebRtc/"]
+COPY ["src/SpeechToSpeech.Backends.OpenLipSync/SpeechToSpeech.Backends.OpenLipSync.csproj", "src/SpeechToSpeech.Backends.OpenLipSync/"]
+COPY ["src/SpeechToSpeech.Backends.PyannoteDiarization/SpeechToSpeech.Backends.PyannoteDiarization.csproj", "src/SpeechToSpeech.Backends.PyannoteDiarization/"]
+COPY ["src/SpeechToSpeech.Backends.SpeakerEmbedding/SpeechToSpeech.Backends.SpeakerEmbedding.csproj", "src/SpeechToSpeech.Backends.SpeakerEmbedding/"]
 RUN dotnet restore src/SpeechToSpeech.Cli/SpeechToSpeech.Cli.csproj
 
 COPY src/ src/
