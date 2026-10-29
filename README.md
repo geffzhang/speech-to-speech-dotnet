@@ -89,6 +89,10 @@ bash ./download-models.sh --groups vad,whisper
 
 可用组为 `vad`、`whisper`、`llm`、`tts`、`smart-turn`；省略筛选仍下载全部五组。
 
+`local` 会在构建后端和开始监听前检查内置本地后端需要的模型，只下载缺失或校验不通过的模型组；
+默认管线会自动准备五组模型。自定义模型路径始终由用户管理，不会被替换；若文件缺失，`local`
+会在启动监听前报错。`serve` 和 `talk` 的启动行为不变。
+
 | 段 | 参数 | 下载目标（相对 `models/`） | 来源 |
 |---|---|---|---|
 | VAD | `--vad_model_dir` | `vad/silero_vad.onnx`（v5） | [Silero v5 ONNX](https://huggingface.co/runanywhere/silero-vad-v5) |
@@ -140,7 +144,8 @@ dotnet run --project src/SpeechToSpeech.Cli -- serve \
 listening on ws://127.0.0.1:8765/v1/realtime
 ```
 
-模型是**懒加载**的——首个转写/生成才触发加载，所以第一轮延迟偏高（数秒到数十秒），热态后正常。
+模型文件会在 `local` 监听前准备好，但 Whisper、LLM、TTS 权重仍是**懒加载**的——首个转写/生成才触发加载，
+所以第一轮延迟偏高（数秒到数十秒），热态后正常。
 
 ### 说话
 
@@ -156,9 +161,9 @@ dotnet run --project src/SpeechToSpeech.Cli -- local
 
 > 用耳机，否则助手会听见自己。`talk` / `local` 支持 `--block-mic-during-playback` 在播放期间闭嘴。
 
-> **真跑必读**：`talk` 必须对着**带全模型路径**起的 `serve` 用。缺 VAD 模型目录时，服务端在
-> **连接构建期**就拒绝连接——客户端侧表现为「连上了但收不到任何事件」，看起来像客户端 bug，
-> 其实不是（差异账 E003）。
+> **真跑必读**：`talk` 必须对着**带全模型路径**起的 `serve` 用。`serve` 不会自动下载模型；
+> 缺 VAD 模型目录时，它会在连接构建期拒绝连接，客户端收不到 `session.created` 等事件。
+> `local` 则会在开始监听前自动准备所需的默认模型组，缺失的自定义模型会明确报错。
 
 ---
 
@@ -407,7 +412,7 @@ python ~/.workbuddy/skills/cross-lang-porting/scripts/diff_corpus.py verify --co
 | `D010` | 上游多数后端无 C# 运行时 | 注册表 32 个名字里 21 个不可用——名字保留、选择即报明确原因，不静默降级 |
 | `D008` | ManySpeech 本地 STT 无增量转写 | 走 `whisper` / `paraformer` 时没有 `transcription.delta`；流式路径由 `openai-realtime` / `vllm-realtime` 承担 |
 | `D036` | STT 参数命名统一 `{backend}_*` 模板 | 上游是 `vllm_realtime_stt_*`；映射表在 `docs/vllm-realtime-d005-integration.md` §5.1 |
-| `E003` | 缺模型时运行期报错而非启动期 | 表现为「连上了但收不到事件」——先看服务端日志 |
+| `E003` | `serve` 保持本地模型懒加载 | `local` 已在监听前准备默认模型并校验自定义路径；单独运行 `serve` 时模型仍按原行为在连接/首次使用时检查 |
 | `C005` | 分句器由 Punkt 改为确定性规则 | **刻意改进**：上游 Punkt 用英文模型，中文标点完全不切；本实现按全角标点切，中文长回复的首段音频不拖到最后 |
 
 完整清单见 `porting/02-differences.md`（机器可读源 `porting/differences.jsonl`）。

@@ -103,6 +103,17 @@ internal sealed class CommandLine
         return null;
     }
 
+    public void SetIfAbsent(string name, string value)
+    {
+        var normalized = name.Replace('-', '_');
+        if (_values.Keys.Any(key => key.Replace('-', '_') == normalized))
+        {
+            return;
+        }
+
+        _values[name] = value;
+    }
+
     public int IntValue(int fallback, params string[] names)
         => int.TryParse(Value(names), out var parsed) ? parsed : fallback;
 
