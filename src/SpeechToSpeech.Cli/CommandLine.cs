@@ -158,7 +158,7 @@ internal static class OptionsBuilder
     public static BackendContext Build(CommandLine line)
     {
         var ttsBackend = line.Value("tts") ?? "qwen3";
-        var sttBackend = line.Value("stt") ?? "whisper";
+        var sttBackend = line.Value("stt") ?? "sense-voice";
         var llmBackend = line.Value("llm_backend", "llm-backend") ?? "tensorsharp";
 
         var vad = new VadOptions

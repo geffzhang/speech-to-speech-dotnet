@@ -56,7 +56,7 @@ try {
     }
 
     if ($PSBoundParameters.ContainsKey('Groups')) {
-        $allowedGroups = @('vad', 'whisper', 'llm', 'tts', 'smart-turn')
+        $allowedGroups = @('vad', 'whisper', 'sense-voice', 'paraformer', 'llm', 'tts', 'smart-turn')
         $selectedGroups = $Groups.Split(',')
         $groupSet = @{}
         foreach ($group in $selectedGroups) {

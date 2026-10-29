@@ -10,6 +10,8 @@ public sealed class LocalModelPreparationTests : IDisposable
     private static readonly string[] DefaultFiles =
     [
         "vad/silero_vad.onnx",
+        "sense-voice/model.int8.onnx",
+        "sense-voice/tokens.txt",
         "whisper/encoder.int8.onnx",
         "llm/Qwen3.5-0.8B-Q4_K_M.gguf",
         "tts/talker_decode.onnx",
@@ -26,6 +28,175 @@ public sealed class LocalModelPreparationTests : IDisposable
         WriteManifest(DefaultFiles);
     }
 
+    [Theory]
+    [InlineData("sense-voice", "sense-voice")]
+    [InlineData("whisper", "whisper")]
+    [InlineData("paraformer", "paraformer")]
+    public void BuildPlan_selects_requested_stt_group(string backend, string expectedGroup)
+    {
+        var fixtureRoot = Path.Combine(_root, backend);
+        Directory.CreateDirectory(Path.Combine(fixtureRoot, "tools", "models"));
+        File.WriteAllText(
+            Path.Combine(fixtureRoot, OperatingSystem.IsWindows() ? "download-models.ps1" : "download-models.sh"),
+            string.Empty);
+        var manifest = Path.Combine(fixtureRoot, "tools", "models", "models.tsv");
+        var payload = Encoding.UTF8.GetBytes("model fixture");
+        var hash = Convert.ToHexStringLower(SHA256.HashData(payload));
+        File.WriteAllLines(
+            manifest,
+            [
+                $"{hash}\t{payload.Length}\tsense-voice/model.int8.onnx\thttps://example.invalid/sense-voice-fixture",
+                $"{hash}\t{payload.Length}\tsense-voice/tokens.txt\thttps://example.invalid/sense-tokens",
+                $"{hash}\t{payload.Length}\twhisper/encoder.int8.onnx\thttps://example.invalid/whisper",
+                $"{hash}\t{payload.Length}\tparaformer/model.int8.onnx\thttps://example.invalid/paraformer-fixture",
+                $"{hash}\t{payload.Length}\tparaformer/config.yaml\thttps://example.invalid/paraformer-config",
+                $"{hash}\t{payload.Length}\tparaformer/tokens.txt\thttps://example.invalid/paraformer-tokens",
+                $"{hash}\t{payload.Length}\tvad/silero_vad.onnx\thttps://example.invalid/vad",
+                $"{hash}\t{payload.Length}\tllm/model.gguf\thttps://example.invalid/llm",
+                $"{hash}\t{payload.Length}\ttts/model.onnx\thttps://example.invalid/tts",
+                $"{hash}\t{payload.Length}\tsmart-turn/model.onnx\thttps://example.invalid/smart-turn",
+            ],
+            Encoding.ASCII);
+        var line = CommandLine.Parse(["serve", "--stt", backend]);
+
+        var plan = LocalModelPreparation.BuildPlan(line, fixtureRoot);
+
+        Assert.Contains(expectedGroup, plan.SelectedGroups);
+        Assert.DoesNotContain(
+            plan.SelectedGroups.Where(group => group is "sense-voice" or "whisper" or "paraformer"),
+            group => group != expectedGroup);
+    }
+
+    [Theory]
+    [InlineData("sense-voice", "tokens.txt")]
+    [InlineData("paraformer", "config.yaml")]
+    public async Task PrepareAsync_validates_stt_custom_directory_requirements(string backend, string missingFile)
+    {
+        var fixtureRoot = CreateBackendFixture(backend);
+        var customDirectory = Path.Combine(_root, $"custom-{backend}");
+        Directory.CreateDirectory(customDirectory);
+        foreach (var fileName in new[] { "model.int8.onnx", "config.yaml", "tokens.txt" }
+                     .Where(file => file != missingFile))
+        {
+            File.WriteAllText(Path.Combine(customDirectory, fileName), "model");
+        }
+
+        var plan = LocalModelPreparation.BuildPlan(
+            CommandLine.Parse(
+            [
+                "serve",
+                "--vad_model_dir", CreateVadDirectory(fixtureRoot),
+                "--stt", backend,
+                "--llm_backend", "openai",
+                "--tts", "openai",
+                "--no_smart_turn",
+                $"--{backend.Replace('-', '_')}_model_dir", customDirectory,
+            ]),
+            fixtureRoot);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            LocalModelPreparation.PrepareAsync(plan, (_, _) => Task.FromResult(0), CancellationToken.None));
+
+        Assert.Contains(missingFile, error.Message);
+    }
+
+    [Theory]
+    [InlineData("sense-voice", "tokens.txt")]
+    [InlineData("paraformer", "tokens.txt")]
+    [InlineData("paraformer", "config.yaml")]
+    public async Task PrepareAsync_rejects_missing_stt_custom_files(string backend, string missingFile)
+    {
+        var fixtureRoot = CreateBackendFixture(backend);
+        var customDirectory = Path.Combine(_root, $"incomplete-{backend}-{missingFile.Replace('.', '-')}");
+        Directory.CreateDirectory(customDirectory);
+        foreach (var fileName in new[] { "model.int8.onnx", "config.yaml", "tokens.txt" }
+                     .Where(file => file != missingFile))
+        {
+            File.WriteAllText(Path.Combine(customDirectory, fileName), "model");
+        }
+
+        var plan = LocalModelPreparation.BuildPlan(
+            CommandLine.Parse(
+            [
+                "serve",
+                "--vad_model_dir", CreateVadDirectory(fixtureRoot),
+                "--stt", backend,
+                "--llm_backend", "openai",
+                "--tts", "openai",
+                "--no_smart_turn",
+                $"--{backend.Replace('-', '_')}_model_dir", customDirectory,
+            ]),
+            fixtureRoot);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            LocalModelPreparation.PrepareAsync(plan, (_, _) => Task.FromResult(0), CancellationToken.None));
+
+        Assert.Contains(missingFile, error.Message);
+    }
+
+    [Fact]
+    public async Task PrepareAsync_accepts_sense_voice_custom_directory_without_config_yaml()
+    {
+        var fixtureRoot = CreateBackendFixture("sense-voice");
+        var customDirectory = Path.Combine(_root, "custom-sense-voice");
+        Directory.CreateDirectory(customDirectory);
+        File.WriteAllText(Path.Combine(customDirectory, "model.int8.onnx"), "model");
+        File.WriteAllText(Path.Combine(customDirectory, "tokens.txt"), "tokens");
+        var plan = LocalModelPreparation.BuildPlan(
+            CommandLine.Parse(
+            [
+                "serve",
+                "--vad_model_dir", CreateVadDirectory(fixtureRoot),
+                "--stt", "sense-voice",
+                "--llm_backend", "openai",
+                "--tts", "openai",
+                "--no_smart_turn",
+                "--sense_voice_model_dir", customDirectory,
+            ]),
+            fixtureRoot);
+
+        await LocalModelPreparation.PrepareAsync(plan, (_, _) => Task.FromResult(0), CancellationToken.None);
+    }
+
+    [Fact]
+    public void BuildPlan_uses_sense_voice_by_default_and_preserves_shared_stt_model_directory()
+    {
+        var line = CommandLine.Parse(["serve", "--stt_model_dir", Path.Combine(_root, "custom-stt")]);
+
+        var plan = LocalModelPreparation.BuildPlan(line, _root);
+
+        Assert.DoesNotContain("sense-voice", plan.SelectedGroups);
+        Assert.Contains(plan.CustomPaths, path => path.OptionName == "sense_voice_model_dir");
+        Assert.Equal(1, plan.CustomPaths.Count(path => path.OptionName == "sense_voice_model_dir"));
+    }
+
+    private string CreateBackendFixture(string backend)
+    {
+        var fixtureRoot = Path.Combine(_root, backend);
+        Directory.CreateDirectory(Path.Combine(fixtureRoot, "tools", "models"));
+        CreateVadDirectory(fixtureRoot);
+        File.WriteAllText(
+            Path.Combine(fixtureRoot, OperatingSystem.IsWindows() ? "download-models.ps1" : "download-models.sh"),
+            string.Empty);
+        var payload = Encoding.UTF8.GetBytes("model fixture");
+        var hash = Convert.ToHexStringLower(SHA256.HashData(payload));
+        File.WriteAllLines(
+            Path.Combine(fixtureRoot, "tools", "models", "models.tsv"),
+            [
+                $"{hash}\t{payload.Length}\t{backend}/model.int8.onnx\thttps://example.invalid/model",
+                $"{hash}\t{payload.Length}\t{backend}/tokens.txt\thttps://example.invalid/tokens",
+                $"{hash}\t{payload.Length}\t{backend}/config.yaml\thttps://example.invalid/config",
+            ],
+            Encoding.ASCII);
+        return fixtureRoot;
+    }
+
+    private static string CreateVadDirectory(string fixtureRoot)
+    {
+        var vadDirectory = Path.Combine(fixtureRoot, "vad");
+        Directory.CreateDirectory(vadDirectory);
+        File.WriteAllText(Path.Combine(vadDirectory, "silero_vad.onnx"), "model");
+        return vadDirectory;
+    }
+
     [Fact]
     public void BuildPlan_selects_default_local_backend_groups()
     {
@@ -33,11 +204,11 @@ public sealed class LocalModelPreparationTests : IDisposable
         var plan = LocalModelPreparation.BuildPlan(line, _root);
         LocalModelPreparation.ApplyDefaultPaths(line, plan);
 
-        Assert.Equal(["vad", "whisper", "llm", "tts", "smart-turn"], plan.SelectedGroups);
+        Assert.Equal(["vad", "sense-voice", "llm", "tts", "smart-turn"], plan.SelectedGroups);
         Assert.Equal(Path.Combine(_root, "models"), plan.ModelsDirectory);
-        Assert.Equal(5, plan.ManifestEntries.Count);
+        Assert.Equal(6, plan.ManifestEntries.Count);
         Assert.Equal(Path.Combine(_root, "models", "vad"), line.Value("vad_model_dir"));
-        Assert.Equal(Path.Combine(_root, "models", "whisper"), line.Value("whisper_model_dir"));
+        Assert.Equal(Path.Combine(_root, "models", "sense-voice"), line.Value("sense_voice_model_dir"));
         Assert.Equal(Path.Combine(_root, "models", "llm", "Qwen3.5-0.8B-Q4_K_M.gguf"), line.Value("llm_model_path"));
         Assert.Equal(Path.Combine(_root, "models", "tts"), line.Value("qwen3_model_dir"));
         Assert.Equal(
@@ -52,7 +223,7 @@ public sealed class LocalModelPreparationTests : IDisposable
 
         var plan = LocalModelPreparation.BuildPlan(line, _root);
 
-        Assert.Equal(["vad", "whisper", "llm", "tts", "smart-turn"], plan.SelectedGroups);
+        Assert.Equal(["vad", "sense-voice", "llm", "tts", "smart-turn"], plan.SelectedGroups);
     }
 
     [Fact]
@@ -69,14 +240,14 @@ public sealed class LocalModelPreparationTests : IDisposable
     public void BuildPlan_does_not_replace_explicit_model_paths()
     {
         var vad = Path.Combine(_root, "custom-vad");
-        var whisper = Path.Combine(_root, "custom-whisper");
+        var senseVoice = Path.Combine(_root, "custom-sense-voice");
         var llm = Path.Combine(_root, "custom.gguf");
         var tts = Path.Combine(_root, "custom-tts");
         var line = CommandLine.Parse(
         [
             "local",
             "--vad_model_dir", vad,
-            "--whisper_model_dir", whisper,
+            "--sense_voice_model_dir", senseVoice,
             "--llm_model_path", llm,
             "--qwen3_model_dir", tts,
         ]);
@@ -85,11 +256,11 @@ public sealed class LocalModelPreparationTests : IDisposable
         LocalModelPreparation.ApplyDefaultPaths(line, plan);
 
         Assert.Equal(vad, line.Value("vad_model_dir"));
-        Assert.Equal(whisper, line.Value("whisper_model_dir"));
+        Assert.Equal(senseVoice, line.Value("sense_voice_model_dir"));
         Assert.Equal(llm, line.Value("llm_model_path"));
         Assert.Equal(tts, line.Value("qwen3_model_dir"));
         Assert.DoesNotContain("vad", plan.SelectedGroups);
-        Assert.DoesNotContain("whisper", plan.SelectedGroups);
+        Assert.DoesNotContain("sense-voice", plan.SelectedGroups);
         Assert.DoesNotContain("llm", plan.SelectedGroups);
         Assert.DoesNotContain("tts", plan.SelectedGroups);
         Assert.Equal(4, plan.CustomPaths.Count);

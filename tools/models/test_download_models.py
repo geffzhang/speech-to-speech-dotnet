@@ -96,7 +96,7 @@ class DownloadTests(unittest.TestCase):
                 self.server.requests.clear()
                 folder = self.base / name / "model files"
                 target = folder / "tts" / "nested" / "model.onnx"
-                target.parent.mkdir(parents=True)
+                target.parent.mkdir(parents=True, exist_ok=True)
                 scenario(name, command, folder, target)
 
     def assert_ok(self, result):
@@ -211,15 +211,39 @@ class DownloadTests(unittest.TestCase):
         def scenario(name, command, folder, target):
             rows = [
                 f"{SHA256}\t{len(PAYLOAD)}\t{group}/one.onnx\t{self.url}/model"
-                for group in ("vad", "whisper", "tts")
+                for group in ("vad", "whisper", "sense-voice", "paraformer", "tts")
             ]
             result = self.run_script(name, command, folder, rows=rows, groups="vad,tts")
             self.assert_ok(result)
             self.assertEqual(PAYLOAD, (folder / "vad" / "one.onnx").read_bytes())
             self.assertEqual(PAYLOAD, (folder / "tts" / "one.onnx").read_bytes())
             self.assertFalse((folder / "whisper" / "one.onnx").exists())
+            self.assertFalse((folder / "sense-voice" / "one.onnx").exists())
+            self.assertFalse((folder / "paraformer" / "one.onnx").exists())
             self.assertEqual(["/model", "/model"], [path for path, _ in self.server.requests])
+        def backend_scenarios(name, command, folder, target):
+            for group in ("sense-voice", "paraformer"):
+                self.server.requests.clear()
+                other = "paraformer" if group == "sense-voice" else "sense-voice"
+                (folder / group / "one.onnx").unlink(missing_ok=True)
+                (folder / other / "one.onnx").unlink(missing_ok=True)
+                result = self.run_script(
+                    name,
+                    command,
+                    folder,
+                    rows=[
+                        f"{SHA256}\t{len(PAYLOAD)}\t{candidate}/one.onnx\t{self.url}/model"
+                        for candidate in ("sense-voice", "paraformer")
+                    ],
+                    groups=group,
+                )
+                self.assert_ok(result)
+                self.assertTrue((folder / group / "one.onnx").is_file())
+                self.assertFalse((folder / other / "one.onnx").exists())
+                self.assertEqual(["/model"], [path for path, _ in self.server.requests])
+
         self.for_each_runtime(scenario)
+        self.for_each_runtime(backend_scenarios)
 
     def test_group_filter_rejects_empty_unknown_and_duplicate_groups(self):
         def scenario(name, command, folder, target):
@@ -281,6 +305,9 @@ class ManifestTests(unittest.TestCase):
         required = {
             "vad/silero_vad.onnx",
             "whisper/conf.json", "whisper/encoder.int8.onnx", "whisper/decoder.int8.onnx",
+            "sense-voice/model.int8.onnx", "sense-voice/tokens.txt",
+            "paraformer/model.int8.onnx", "paraformer/config.yaml", "paraformer/tokens.txt",
+            "paraformer/am.mvn",
             "llm/qwen3.5-0.8b-q4_k_m.gguf",
             "smart-turn/smart-turn-v3.2-cpu.onnx",
             "tts/talker_prefill.onnx", "tts/talker_prefill.onnx.data",
@@ -296,6 +323,32 @@ class ManifestTests(unittest.TestCase):
             "tts/embeddings/text_projection_fc2_bias.npy",
         } | {f"tts/embeddings/cp_codec_embedding_{i}.npy" for i in range(15)}
         self.assertEqual(required, files.keys())
+        self.assertEqual(2, sum(path.startswith("sense-voice/") for path in files))
+        self.assertEqual(4, sum(path.startswith("paraformer/") for path in files))
+        self.assertEqual(
+            ("f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc", 315894),
+            files["sense-voice/tokens.txt"],
+        )
+        self.assertEqual(
+            ("f36a0433bcf096bd6d6f11b80a3ac8bed110bdca632fe0d731df8d1a84475945", 243371218),
+            files["paraformer/model.int8.onnx"],
+        )
+        self.assertEqual(
+            ("c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51", 239233841),
+            files["sense-voice/model.int8.onnx"],
+        )
+        self.assertEqual(
+            ("6244fb74572573abcf7127283c9c20b440a2f43d4891a5d8ede0eee351855d87", 56799),
+            files["paraformer/config.yaml"],
+        )
+        self.assertEqual(
+            ("59aba8873a2ed1e122c25fee421e25f283b63290efbde85c1f01a853d83cb6e6", 75756),
+            files["paraformer/tokens.txt"],
+        )
+        self.assertEqual(
+            ("29b3c740a2c0cfc6b308126d31d7f265fa2be74f3bb095cd2f143ea970896ae5", 11203),
+            files["paraformer/am.mvn"],
+        )
 
 
 if __name__ == "__main__":

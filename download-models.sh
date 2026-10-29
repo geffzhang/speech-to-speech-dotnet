@@ -34,7 +34,7 @@ if [[ "$groups_set" == true ]]; then
     checked_groups=()
     for group in "${groups[@]}"; do
         case "$group" in
-            vad|whisper|llm|tts|smart-turn) ;;
+            vad|whisper|sense-voice|paraformer|llm|tts|smart-turn) ;;
             *) fail "Invalid group filter: $group" ;;
         esac
         for checked in "${checked_groups[@]+"${checked_groups[@]}"}"; do

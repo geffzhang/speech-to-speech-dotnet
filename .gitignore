@@ -410,3 +410,4 @@ tools/smoke/serve.pid
 models/
 !tools/models/
 /cache/models/
+.worktrees/

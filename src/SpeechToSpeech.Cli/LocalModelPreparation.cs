@@ -35,7 +35,7 @@ internal sealed class LocalModelPlan(
 
 internal static class LocalModelPreparation
 {
-    private static readonly string[] KnownGroups = ["vad", "whisper", "llm", "tts", "smart-turn"];
+    private static readonly string[] KnownGroups = ["vad", "whisper", "sense-voice", "paraformer", "llm", "tts", "smart-turn"];
     private const string DefaultLlmFile = "llm/Qwen3.5-0.8B-Q4_K_M.gguf";
     private const string DefaultSmartTurnFile = "smart-turn/smart-turn-v3.2-cpu.onnx";
 
@@ -78,20 +78,30 @@ internal static class LocalModelPreparation
             custom.Add(new("vad_model_dir", vadPath, true, ["*.onnx"]));
         }
 
-        var sttBackend = line.Value("stt") ?? "whisper";
-        if (sttBackend == "whisper")
+        var sttBackend = line.Value("stt") ?? "sense-voice";
+        if (sttBackend is "whisper" or "sense-voice" or "paraformer")
         {
-            var whisperPath = line.Value("whisper_model_dir", "stt_model_dir", "whisper-model-dir", "stt-model-dir");
-            if (whisperPath is null)
+            var modelDirectoryOption = $"{sttBackend.Replace('-', '_')}_model_dir";
+            var modelPath = line.Value(
+                modelDirectoryOption,
+                "stt_model_dir",
+                $"{sttBackend}_model_dir",
+                "stt-model-dir");
+            if (modelPath is null)
             {
-                AddDefaultGroup("whisper", "whisper_model_dir",
-                    ["whisper_model_dir", "stt_model_dir", "whisper-model-dir", "stt-model-dir"],
-                    Path.Combine(modelsDirectory, "whisper"));
+                AddDefaultGroup(sttBackend, modelDirectoryOption,
+                    [modelDirectoryOption, "stt_model_dir", $"{sttBackend}-model-dir", "stt-model-dir"],
+                    Path.Combine(modelsDirectory, sttBackend));
             }
             else
             {
-                custom.Add(new("whisper_model_dir", whisperPath, true,
-                    ["encoder*.onnx", "decoder*.onnx", "conf.json"]));
+                var requiredFiles = sttBackend switch
+                {
+                    "sense-voice" => new[] { "model*.onnx", "tokens.txt" },
+                    "paraformer" => new[] { "model*.onnx", "config.yaml", "tokens.txt" },
+                    _ => new[] { "encoder*.onnx", "decoder*.onnx", "conf.json" },
+                };
+                custom.Add(new(modelDirectoryOption, modelPath, true, requiredFiles));
             }
         }
 
@@ -483,6 +493,8 @@ internal static class LocalModelPreparation
         {
             "vad_model_dir" => "vad",
             "whisper_model_dir" => "whisper",
+            "sense_voice_model_dir" => "sense-voice",
+            "paraformer_model_dir" => "paraformer",
             "llm_model_path" => "llm",
             "qwen3_model_dir" => "tts",
             "smart_turn_model_path" => "smart-turn",

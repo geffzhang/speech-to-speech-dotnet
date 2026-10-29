@@ -3,7 +3,7 @@
 **[`huggingface/speech-to-speech`](https://github.com/huggingface/speech-to-speech) 的 C# 行为等价重写。**
 
 一个完全跑在本地的低延迟语音智能体：一条命令就开始对话——没有 API key，没有云服务。
-默认管线是 **Silero VAD → Whisper → TensorSharp(本地 GGUF LLM) → Qwen3-TTS**，
+默认管线是 **Silero VAD → SenseVoice → TensorSharp(本地 GGUF LLM) → Qwen3-TTS**，
 每一段都可替换。服务端讲 **OpenAI Realtime 协议**（WebSocket 与 WebRTC 双传输），
 所以为 OpenAI Realtime API 写的应用可以把地址指向你自己的机器。
 
@@ -38,7 +38,7 @@
 |---|---|
 | .NET SDK | **10.0**（`net10.0`，Nullable 启用） |
 | 音频后端 | Windows：WASAPI + WinMM；Linux：ALSA；macOS：PortAudio |
-| 模型权重 | 用下载脚本一键准备，约 **6.61 GB**，见下节 |
+| 模型权重 | 用下载脚本一键准备，约 **6.86 GB**，见下节 |
 
 Linux 上需要 `libasound2`（NAudio.Alsa 的原生依赖）：
 
@@ -56,7 +56,7 @@ dotnet build SpeechToSpeech.slnx
 
 ### 准备模型
 
-在仓库根目录执行一条命令，下载默认本地管线的**全部五组模型**（含可选 Smart Turn）：
+在仓库根目录执行一条命令，下载清单中的**全部七组模型**（包含 Whisper、SenseVoice、Paraformer 与可选 Smart Turn）：
 
 ```powershell
 # Windows PowerShell 5.1+ / PowerShell 7
@@ -80,36 +80,51 @@ bash ./download-models.sh
 手动下载时可按模型组筛选（`serve` 和 `local` 启动时也会使用此筛选，只准备本地后端需要的组）：
 
 ```powershell
-.\download-models.ps1 -Groups vad,whisper
+.\download-models.ps1 -Groups vad,sense-voice
 ```
 
 ```bash
-bash ./download-models.sh --groups vad,whisper
+bash ./download-models.sh --groups vad,sense-voice
 ```
 
-可用组为 `vad`、`whisper`、`llm`、`tts`、`smart-turn`；省略筛选仍下载全部五组。
+可用组为 `vad`、`whisper`、`sense-voice`、`paraformer`、`llm`、`tts`、`smart-turn`；省略筛选仍下载全部七组。
 
 `serve` 和 `local` 都会在构建后端和开始监听前检查内置本地后端需要的模型，只下载缺失或校验不通过的模型组；
-默认管线会自动准备五组模型。自定义模型路径始终由用户管理，不会被替换；若文件缺失，命令会在启动监听前报错。SHA-256 校验通过后会把文件元数据记在
+默认管线会自动准备五组模型（含 SenseVoice，不包括未选中的 Whisper 和 Paraformer）。自定义模型路径始终由用户管理，不会被替换；若文件缺失，命令会在启动监听前报错。SHA-256 校验通过后会把文件元数据记在
 `models/.model-verification-cache.json`，未变化的权重后续启动无需重复读取数 GB 文件；删除该记录会触发重新校验。
 `talk` 不需要模型，启动行为不变。
 
 | 段 | 参数 | 下载目标（相对 `models/`） | 来源 |
 |---|---|---|---|
 | VAD | `--vad_model_dir` | `vad/silero_vad.onnx`（v5） | [Silero v5 ONNX](https://huggingface.co/runanywhere/silero-vad-v5) |
-| STT | `--whisper_model_dir` | `whisper/`（多语种 base INT8 encoder + decoder + `conf.json`） | [ManySpeech Whisper](https://modelscope.cn/models/manyeyes/whisper-base-onnx) |
+| STT（默认） | `--sense_voice_model_dir` | `sense-voice/`（多语种 INT8 ONNX + tokens；约 228.5 MiB） | [SenseVoice](https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17) |
+| STT（可选） | `--stt whisper --whisper_model_dir` | `whisper/`（多语种 base INT8 encoder + decoder + `conf.json`） | [ManySpeech Whisper](https://modelscope.cn/models/manyeyes/whisper-base-onnx) |
+| STT（可选） | `--stt paraformer --paraformer_model_dir` | `paraformer/`（INT8 ONNX + config + tokens + `am.mvn`） | [Paraformer](https://huggingface.co/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14) |
 | LLM | `--llm_model_path` | `llm/Qwen3.5-0.8B-Q4_K_M.gguf` | [Unsloth GGUF](https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF) |
 | TTS | `--qwen3_model_dir` | `tts/`（0.6B CustomVoice ONNX + 外部数据 + embeddings + tokenizer） | [ElBruno Qwen3-TTS](https://huggingface.co/elbruno/Qwen3-TTS-12Hz-0.6B-CustomVoice-ONNX) |
 | 端点判定 | `--smart_turn_model_path` | `smart-turn/smart-turn-v3.2-cpu.onnx` | [Pipecat Smart Turn](https://huggingface.co/pipecat-ai/smart-turn-v3) |
 
-- 共 **39 个文件，6,612,701,771 字节**；预留至少 7 GB 可用空间，替换旧模型时还需临时文件空间。
+- 全量清单共 **45 个文件，7,095,766,482 字节**；预留至少 7.5 GB 可用空间，替换旧模型时还需临时文件空间。默认管线实际准备 5 组，约 6.84 GB。
 - 已有文件每次都校验大小和 SHA-256，正确的直接跳过；损坏的重新下载，旧文件在新文件校验成功前保留。
 - 下载写入同目录的 `.part` 文件；断网或 Ctrl+C 后**重跑原命令**即可续传。服务端不支持 Range 时明确告警并从头下载。
 - 校验成功才改为正式文件名；校验失败返回非零退出码并删除坏的 `.part`，下次重新下载；网络失败则保留 `.part`。
 - 清单中大文件的 SHA-256 来自发布方 LFS / ModelScope 元数据，小文件按固定版本内容计算。
   下载不代表接受额外授权，使用前仍应核对各模型原始许可。
-- 这些脚本只准备默认五组资产，不包含 Paraformer、说话人分离、声纹或口型等可选后端；
+- SenseVoice 模型受 [FunASR Model Open Source License](https://github.com/FunAudioLLM/SenseVoice/blob/main/LICENSE) 约束；Paraformer、Whisper 等模型分别遵循各自来源的许可。使用前请核对原始许可。
+- 这些脚本也提供 Paraformer 和 Whisper 资产；不包含说话人分离、声纹或口型等可选组件；
   不要同时对同一个目录运行多个下载进程。
+
+默认使用 SenseVoice；如需选择其他 STT 后端，可显式指定后端与对应模型组：
+
+```powershell
+.\download-models.ps1 -Groups vad,whisper
+dotnet run --project src/SpeechToSpeech.Cli -- serve --stt whisper
+```
+
+```bash
+bash ./download-models.sh --groups vad,paraformer
+dotnet run --project src/SpeechToSpeech.Cli -- serve --stt paraformer
+```
 
 自定义模型根目录（起服务时相应修改 `S2S`）：
 
@@ -208,7 +223,8 @@ dotnet run --project src/SpeechToSpeech.Cli -- list-backends
 
 | 段 | 后端 | 说明 |
 |---|---|---|
-| STT | `whisper`（默认） | ManySpeech 的 Whisper ONNX，离线整段识别 |
+| STT | `sense-voice`（默认） | ManySpeech 的 SenseVoice ONNX，离线整段识别 |
+| STT | `whisper` | ManySpeech 的 Whisper ONNX，离线整段识别 |
 | STT | `paraformer` | ManySpeech 的 Ali Paraformer |
 | STT | `sense-voice` | ManySpeech |
 | STT | `openai` | OpenAI 兼容 `/v1/audio/transcriptions` |
@@ -238,12 +254,12 @@ dotnet run --project src/SpeechToSpeech.Cli -- list-backends
 
 | 类别 | 后端 | 采样率 | 行为 |
 |---|---|---|---|
-| 离线整段 | `whisper`（默认）/ `paraformer` / `sense-voice` | 16 kHz | 每个 VAD 段**结束**才发 `transcription.completed`，**没有** `transcription.delta` |
+| 离线整段 | `sense-voice`（默认）/ `whisper` / `paraformer` | 16 kHz | 每个 VAD 段**结束**才发 `transcription.completed`，**没有** `transcription.delta` |
 | 离线整段（远程） | `openai` | 16 kHz | 同前，走 `/audio/transcriptions` |
 | 流式实时 | `openai-realtime` / `vllm-realtime` | 24 kHz / 16 kHz | 说话过程中**逐段**发 `transcription.delta` |
 
 要「边说边出字」的实时感、或对中文/方言质量要求更高 → 流式；要完全本地、离线、无外部端点 →
-默认 `whisper`。
+默认 `sense-voice`。
 
 > `transcription.delta` **不需要客户端订阅**，流式后端在说话过程中就推。
 > `speech_to_speech.input_audio_transcription.snapshot` 是另一条通道，需要在 `session.update`
@@ -478,7 +494,7 @@ storage, custom mounts, and direct `docker run` usage.
 docker compose up --build
 ```
 
-首次启动会自动下载并校验默认五组模型（约 **6.6 GB**），写入 Compose 的 `models` 命名卷后才启动服务。
+首次启动会自动下载并校验默认五组模型（约 **6.84 GB**），写入 Compose 的 `models` 命名卷后才启动服务。
 后续启动会复用卷中已校验的文件；无需预先创建 `./cache/models/`，也无需单独运行宿主机 LLM 服务。
 Compose 默认使用本地 TensorSharp GGUF 模型。模型权重仍受各自上游许可约束；下载地址和校验值来自
 [`tools/models/models.tsv`](tools/models/models.tsv)。

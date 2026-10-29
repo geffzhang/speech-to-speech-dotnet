@@ -27,7 +27,9 @@ public sealed class ParaformerSttBackend : ManySpeechSttBackendBase
     protected override void Load()
     {
         var model = ModelFiles.Require(_options.ModelDir, _kind, "model*.onnx", "*.onnx");
-        var config = ModelFiles.Require(_options.ModelDir, _kind, "config.yaml", "*.yaml");
+        var config = _kind == "sense-voice"
+            ? ModelFiles.Optional(_options.ModelDir, "config.yaml", "*.yaml") ?? string.Empty
+            : ModelFiles.Require(_options.ModelDir, _kind, "config.yaml", "*.yaml");
         var mvn = ModelFiles.Optional(_options.ModelDir, "am.mvn", "*.mvn");
         var tokens = ModelFiles.Require(_options.ModelDir, _kind, "tokens.txt");
 

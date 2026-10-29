@@ -1,5 +1,11 @@
 # sha256	bytes	path	url
 1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3	2327524	vad/silero_vad.onnx	https://huggingface.co/runanywhere/silero-vad-v5/resolve/38a8e93669ea8fd4dd5d693bc90d86b7b667d36d/silero_vad.onnx
+f36a0433bcf096bd6d6f11b80a3ac8bed110bdca632fe0d731df8d1a84475945	243371218	paraformer/model.int8.onnx	https://huggingface.co/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14/resolve/def027084691107096b5ebba69785756d63de6c5/model.int8.onnx
+6244fb74572573abcf7127283c9c20b440a2f43d4891a5d8ede0eee351855d87	56799	paraformer/config.yaml	https://huggingface.co/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14/resolve/def027084691107096b5ebba69785756d63de6c5/config.yaml
+29b3c740a2c0cfc6b308126d31d7f265fa2be74f3bb095cd2f143ea970896ae5	11203	paraformer/am.mvn	https://huggingface.co/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14/resolve/def027084691107096b5ebba69785756d63de6c5/am.mvn
+59aba8873a2ed1e122c25fee421e25f283b63290efbde85c1f01a853d83cb6e6	75756	paraformer/tokens.txt	https://huggingface.co/csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14/resolve/def027084691107096b5ebba69785756d63de6c5/tokens.txt
+f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc	315894	sense-voice/tokens.txt	https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/2365baeacb507f821a0c8120fcee3d484dba7a07/tokens.txt
+c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51	239233841	sense-voice/model.int8.onnx	https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/2365baeacb507f821a0c8120fcee3d484dba7a07/model.int8.onnx
 9f6bc1900b92ac9d4242592fda754f97eeebabb88fe20aef40f49ffd78a650c5	712	whisper/conf.json	https://modelscope.cn/models/manyeyes/whisper-base-onnx/resolve/766ffdcca5a302492ac4224e67bb65d26b4c98d3/conf.json
 63a8edfda9f25cb6964b50f2d3bc556ff145f67bfeb810746e780914703740fd	160118478	whisper/decoder.int8.onnx	https://modelscope.cn/models/manyeyes/whisper-base-onnx/resolve/766ffdcca5a302492ac4224e67bb65d26b4c98d3/decoder.int8.onnx
 85f7135ab361c7f40ae395e11cffe8d92463b8d7028a9e09207066eb3b30ea0d	25870953	whisper/encoder.int8.onnx	https://modelscope.cn/models/manyeyes/whisper-base-onnx/resolve/766ffdcca5a302492ac4224e67bb65d26b4c98d3/encoder.int8.onnx
