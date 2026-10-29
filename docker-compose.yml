@@ -2,7 +2,8 @@
 # 做 LLM 服务、pipeline 容器跑 serve；C# 侧全 CPU 推理，不需要 GPU reservation。
 #
 # 用法：
-#   1. 把模型放到 ./cache/models/{vad,whisper,llm,tts,smart-turn}/
+#   1. bash ./download-models.sh --models-dir ./cache/models
+#      PowerShell: .\download-models.ps1 -ModelsDir .\cache\models
 #      （VAD: silero-vad-v5-onnx；STT: whisper ONNX；LLM: GGUF；
 #       TTS: Qwen3-TTS ONNX；SmartTurn: smart-turn-v3.2-cpu.onnx）
 #   2. docker compose up --build
