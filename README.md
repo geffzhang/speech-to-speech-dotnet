@@ -38,7 +38,7 @@
 |---|---|
 | .NET SDK | **10.0**（`net10.0`，Nullable 启用） |
 | 音频后端 | Windows：WASAPI + WinMM；Linux：ALSA；macOS：PortAudio |
-| 模型权重 | 本地目录，见下表。**不下载，只指路** |
+| 模型权重 | 用下载脚本一键准备，约 **6.61 GB**，见下节 |
 
 Linux 上需要 `libasound2`（NAudio.Alsa 的原生依赖）：
 
@@ -56,27 +56,88 @@ dotnet build SpeechToSpeech.slnx
 
 ### 准备模型
 
-权重不入库（`models/` 在 `.gitignore` 里），指向你自己的目录：
+在仓库根目录执行一条命令，下载默认本地管线的**全部五组模型**（含可选 Smart Turn）：
 
-| 段 | 参数 | 权重 |
-|---|---|---|
-| VAD | `--vad_model_dir` | Silero VAD v5 ONNX |
-| STT | `--whisper_model_dir` | Whisper ONNX（`whisper` 后端） |
-| LLM | `--llm_model_path` | GGUF（`tensorsharp` 后端，如 `Qwen3.5-0.8B-Q4_K_M.gguf`） |
-| TTS | `--qwen3_model_dir` | Qwen3-TTS ONNX 目录 |
-| 端点判定 | `--smart_turn_model_path` | `smart-turn-v3.2-cpu.onnx`（可省略，缺则按 disabled 处理并告警） |
+```powershell
+# Windows PowerShell 5.1+ / PowerShell 7
+.\download-models.ps1
+```
+
+```bash
+# Linux / macOS / Git Bash
+bash ./download-models.sh
+```
+
+脚本需要 **curl**（Windows 使用 `curl.exe`，避免 PowerShell 的同名别名）；Bash 另需
+`sha256sum` 或 macOS 自带的 `shasum`。不需要 Python、Hugging Face CLI 或 API key。
+如果 Windows 的执行策略阻止脚本，可以使用
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\download-models.ps1`（仅本次进程生效）。
+
+默认下载到**脚本所在仓库**的 `models/`，不依赖当前工作目录；权重不入库。
+完整 URL、固定提交版本、字节数与 SHA-256 在
+[`tools/models/models.tsv`](tools/models/models.tsv)，不在运行时解析 `main` / `master`：
+
+手动下载时可按模型组筛选（`local` 启动时也会使用此筛选，只准备本地后端需要的组）：
+
+```powershell
+.\download-models.ps1 -Groups vad,whisper
+```
+
+```bash
+bash ./download-models.sh --groups vad,whisper
+```
+
+可用组为 `vad`、`whisper`、`llm`、`tts`、`smart-turn`；省略筛选仍下载全部五组。
+
+`local` 会在构建后端和开始监听前检查内置本地后端需要的模型，只下载缺失或校验不通过的模型组；
+默认管线会自动准备五组模型。自定义模型路径始终由用户管理，不会被替换；若文件缺失，`local`
+会在启动监听前报错。SHA-256 校验通过后会把文件元数据记在
+`models/.model-verification-cache.json`，未变化的权重后续启动无需重复读取数 GB 文件；删除该记录会触发重新校验。
+`serve` 和 `talk` 的启动行为不变。
+
+| 段 | 参数 | 下载目标（相对 `models/`） | 来源 |
+|---|---|---|---|
+| VAD | `--vad_model_dir` | `vad/silero_vad.onnx`（v5） | [Silero v5 ONNX](https://huggingface.co/runanywhere/silero-vad-v5) |
+| STT | `--whisper_model_dir` | `whisper/`（多语种 base INT8 encoder + decoder + `conf.json`） | [ManySpeech Whisper](https://modelscope.cn/models/manyeyes/whisper-base-onnx) |
+| LLM | `--llm_model_path` | `llm/Qwen3.5-0.8B-Q4_K_M.gguf` | [Unsloth GGUF](https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF) |
+| TTS | `--qwen3_model_dir` | `tts/`（0.6B CustomVoice ONNX + 外部数据 + embeddings + tokenizer） | [ElBruno Qwen3-TTS](https://huggingface.co/elbruno/Qwen3-TTS-12Hz-0.6B-CustomVoice-ONNX) |
+| 端点判定 | `--smart_turn_model_path` | `smart-turn/smart-turn-v3.2-cpu.onnx` | [Pipecat Smart Turn](https://huggingface.co/pipecat-ai/smart-turn-v3) |
+
+- 共 **39 个文件，6,612,701,771 字节**；预留至少 7 GB 可用空间，替换旧模型时还需临时文件空间。
+- 已有文件每次都校验大小和 SHA-256，正确的直接跳过；损坏的重新下载，旧文件在新文件校验成功前保留。
+- 下载写入同目录的 `.part` 文件；断网或 Ctrl+C 后**重跑原命令**即可续传。服务端不支持 Range 时明确告警并从头下载。
+- 校验成功才改为正式文件名；校验失败返回非零退出码并删除坏的 `.part`，下次重新下载；网络失败则保留 `.part`。
+- 清单中大文件的 SHA-256 来自发布方 LFS / ModelScope 元数据，小文件按固定版本内容计算。
+  下载不代表接受额外授权，使用前仍应核对各模型原始许可。
+- 这些脚本只准备默认五组资产，不包含 Paraformer、说话人分离、声纹或口型等可选后端；
+  不要同时对同一个目录运行多个下载进程。
+
+自定义模型根目录（起服务时相应修改 `S2S`）：
+
+```powershell
+.\download-models.ps1 -ModelsDir D:\s2s-models
+```
+
+```bash
+bash ./download-models.sh --models-dir /path/to/models
+```
+
+维护或选择其他模型时，两个入口还分别支持 `-Manifest <清单路径>` / `--manifest <清单路径>`；
+TSV 每行依次为 SHA-256、正数字节数、相对目标路径、HTTP(S) URL（tab 分隔，`#` 行为注释）。
+应使用可信清单并锁定源版本，必须同时更新校验值与大小，不能用普通 Hugging Face Whisper 导出替代
+ManySpeech 所需格式；TTS 的 `.onnx.data` 等配套文件也不能遗漏。
 
 ### 起服务
 
 ```bash
-S2S=/path/to/models
+S2S="$PWD/models" # 自定义下载目录时改为对应路径
 dotnet run --project src/SpeechToSpeech.Cli -- serve \
   --port 8765 \
-  --vad_model_dir "$S2S/vad5" \
+  --vad_model_dir "$S2S/vad" \
   --whisper_model_dir "$S2S/whisper" \
   --qwen3_model_dir "$S2S/tts" \
   --smart_turn_model_path "$S2S/smart-turn/smart-turn-v3.2-cpu.onnx" \
-  --llm_model_path "$S2S/llm35/Qwen3.5-0.8B-Q4_K_M.gguf"
+  --llm_model_path "$S2S/llm/Qwen3.5-0.8B-Q4_K_M.gguf"
 ```
 
 看到这行就算起来了：
@@ -85,7 +146,8 @@ dotnet run --project src/SpeechToSpeech.Cli -- serve \
 listening on ws://127.0.0.1:8765/v1/realtime
 ```
 
-模型是**懒加载**的——首个转写/生成才触发加载，所以第一轮延迟偏高（数秒到数十秒），热态后正常。
+模型文件会在 `local` 监听前准备好，但 Whisper、LLM、TTS 权重仍是**懒加载**的——首个转写/生成才触发加载，
+所以第一轮延迟偏高（数秒到数十秒），热态后正常。
 
 ### 说话
 
@@ -101,9 +163,9 @@ dotnet run --project src/SpeechToSpeech.Cli -- local
 
 > 用耳机，否则助手会听见自己。`talk` / `local` 支持 `--block-mic-during-playback` 在播放期间闭嘴。
 
-> **真跑必读**：`talk` 必须对着**带全模型路径**起的 `serve` 用。缺 VAD 模型目录时，服务端在
-> **连接构建期**就拒绝连接——客户端侧表现为「连上了但收不到任何事件」，看起来像客户端 bug，
-> 其实不是（差异账 E003）。
+> **真跑必读**：`talk` 必须对着**带全模型路径**起的 `serve` 用。`serve` 不会自动下载模型；
+> 缺 VAD 模型目录时，它会在连接构建期拒绝连接，客户端收不到 `session.created` 等事件。
+> `local` 则会在开始监听前自动准备所需的默认模型组，缺失的自定义模型会明确报错。
 
 ---
 
@@ -352,7 +414,7 @@ python ~/.workbuddy/skills/cross-lang-porting/scripts/diff_corpus.py verify --co
 | `D010` | 上游多数后端无 C# 运行时 | 注册表 32 个名字里 21 个不可用——名字保留、选择即报明确原因，不静默降级 |
 | `D008` | ManySpeech 本地 STT 无增量转写 | 走 `whisper` / `paraformer` 时没有 `transcription.delta`；流式路径由 `openai-realtime` / `vllm-realtime` 承担 |
 | `D036` | STT 参数命名统一 `{backend}_*` 模板 | 上游是 `vllm_realtime_stt_*`；映射表在 `docs/vllm-realtime-d005-integration.md` §5.1 |
-| `E003` | 缺模型时运行期报错而非启动期 | 表现为「连上了但收不到事件」——先看服务端日志 |
+| `E003` | `serve` 保持本地模型懒加载 | `local` 已在监听前准备默认模型并校验自定义路径；单独运行 `serve` 时模型仍按原行为在连接/首次使用时检查 |
 | `C005` | 分句器由 Punkt 改为确定性规则 | **刻意改进**：上游 Punkt 用英文模型，中文标点完全不切；本实现按全角标点切，中文长回复的首段音频不拖到最后 |
 
 完整清单见 `porting/02-differences.md`（机器可读源 `porting/differences.jsonl`）。
@@ -389,6 +451,9 @@ python ~/.workbuddy/skills/cross-lang-porting/scripts/diff_corpus.py verify --co
 
 # 5. 协议覆盖审计（当前 26/26）
 python tools/refprobe/protocol_coverage.py
+
+# 6. 模型下载脚本集成测试（本地 HTTP，不下载真实权重；自动测试可用的 PowerShell / Bash）
+python -m unittest discover -s tools/models -p test_download_models.py -v
 ```
 
 > **不要并行跑 build 与 test**（会撞 CS2001）。构建前先停掉正在跑的 `serve`——
@@ -412,7 +477,8 @@ python tools/smoke/demo_server_parity.py                                   # dem
 ### Docker
 
 ```bash
-# 模型放到 ./cache/models/{vad,whisper,llm,tts,smart-turn}/
+# 准备容器挂载的模型目录（PowerShell: .\download-models.ps1 -ModelsDir .\cache\models）
+bash ./download-models.sh --models-dir ./cache/models
 docker compose up --build
 ```
 

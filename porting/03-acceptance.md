@@ -852,6 +852,6 @@ local 侧带 `--local-audio-*` 前缀）本实现一个都没解析——Command
 | **D008 本地 STT 无增量转写** | **修订范围**。原表述「客户端收不到 transcription.delta」是全称，已被 D005（2026-10-26 收口的 openai-realtime / vllm-realtime 流式 STT）推翻——选流式后端时 `IStreamAwareSttBackend → IStreamingSttSink → PartialTranscription → transcription.delta` 全链贯通，serve 侧发送点在 `RealtimeConnection.cs` 的 `PartialTranscriptionEvent` 分支。D008 收窄为「ManySpeech 本地路径无流式入口（该库无运行期流式接口，与 D034 的 language 同类约束）」，维持 accepted |
 | D007 LLM 单并发 | 维持。信号量串行化，多客户端排队不崩溃 |
 | D010 后端注册表 | 维持并修正计数。注册表实际 32 个名字（上游 31 个 + C# 专属 `tensorsharp`），实测 **11 可用 / 21 不可用**——原条目自述「12 个后端 / 31 个名字」两处都不准（`what` 字段枚举 20 个且把已实现的 `openai-realtime` / `vllm-realtime` 算作缺失），2026-10-28 已按注册表与 `list-backends` 实测改写条目并重新渲染。行为不变：未实现者带 `UnsupportedReason` 报错不静默 |
-| E003 缺模型运行期报错 | 维持。D035 真跑再次确认该行为（连接构建期即拒，客户端侧「连上但收不到」） |
+| E003 `serve` 本地模型懒加载 | 范围收窄（2026-10-29）：`local` 已在监听前准备默认模型并校验自定义路径；单独运行 `serve` 仍保留按需加载，VAD 缺失时连接构建期拒绝（D035 的历史真跑仍成立） |
 
 **方法备注**：核查动作 = ① 账本 decision 里的每个事实主张找代码/实测对应物；② 对「上游会怎么做」的主张回上游源码验证（如 C008）；③ 对「不影响可观察行为」的主张检查其后的移植工作是否引入了反例（D008 即此类）。账本修订仅 D008 一条，`02-differences.md` 已重新渲染。

@@ -37,6 +37,16 @@ internal static class Program
             }
 
             RegisterBackends();
+            if (line.Command == "local")
+            {
+                var plan = LocalModelPreparation.BuildPlan(line, LocalModelPreparation.FindRepositoryRoot());
+                LocalModelPreparation.ApplyDefaultPaths(line, plan);
+                await LocalModelPreparation.PrepareAsync(
+                    plan,
+                    LocalModelPreparation.RunProcessAsync,
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+
             var context = OptionsBuilder.Build(line);
             WarnIfTurnEndUnavailable(context);
 
@@ -64,6 +74,11 @@ internal static class Program
             return 2;
         }
         catch (ArgumentException ex)
+        {
+            Console.Error.WriteLine($"error: {ex.Message}");
+            return 2;
+        }
+        catch (InvalidOperationException ex)
         {
             Console.Error.WriteLine($"error: {ex.Message}");
             return 2;
