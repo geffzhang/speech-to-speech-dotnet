@@ -25,7 +25,8 @@ function Test-ModelFile([string] $Path, [long] $Size, [string] $Sha256) {
 
 try {
     $curlName = if ($env:OS -eq 'Windows_NT') { 'curl.exe' } else { 'curl' }
-    $curl = (Get-Command $curlName -CommandType Application -ErrorAction Stop).Source
+    $curlCommand = Get-Command $curlName -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    $curl = $curlCommand.Source
     $ModelsDir = [System.IO.Path]::GetFullPath($ModelsDir)
     $entries = @()
     $seen = @{}

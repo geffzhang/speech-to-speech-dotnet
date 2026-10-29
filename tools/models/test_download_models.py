@@ -73,7 +73,7 @@ class DownloadTests(unittest.TestCase):
         self.addCleanup(self.server.shutdown)
         self.url = f"http://127.0.0.1:{self.server.server_port}"
 
-    def run_script(self, name, command, folder, rows=None, endpoint="/model", sha=SHA256, groups=None):
+    def run_script(self, name, command, folder, rows=None, endpoint="/model", sha=SHA256, groups=None, env=None):
         manifest = self.base / f"{name}.tsv"
         if rows is None:
             rows = [f"{sha}\t{len(PAYLOAD)}\ttts/nested/model.onnx\t{self.url}{endpoint}"]
@@ -84,7 +84,9 @@ class DownloadTests(unittest.TestCase):
             args = ["--models-dir", folder.as_posix(), "--manifest", manifest.as_posix()]
         if groups is not None:
             args.extend(["-Groups" if name == "powershell" else "--groups", groups])
-        return subprocess.run(command + args, cwd=self.base, capture_output=True, text=True, timeout=40)
+        return subprocess.run(
+            command + args, cwd=self.base, env=env, capture_output=True, text=True, timeout=40
+        )
 
     def for_each_runtime(self, scenario):
         available = runtimes()
@@ -234,6 +236,31 @@ class DownloadTests(unittest.TestCase):
                 self.assertFalse((folder / "vad" / "one.onnx").exists(), groups)
                 self.assertFalse((folder / "whisper" / "one.onnx").exists(), groups)
         self.for_each_runtime(scenario)
+
+    @unittest.skipUnless(os.name == "nt", "PowerShell executable resolution is Windows-specific")
+    def test_powershell_downloads_when_multiple_curl_executables_are_on_path(self):
+        powershell = next((command for name, command in runtimes() if name == "powershell"), None)
+        self.assertIsNotNone(powershell, "PowerShell is required for this Windows test")
+        curl = shutil.which("curl.exe")
+        self.assertIsNotNone(curl, "curl.exe is required")
+        duplicate_dir = self.base / "second-curl"
+        duplicate_dir.mkdir()
+        shutil.copy2(curl, duplicate_dir / "curl.exe")
+        env = os.environ.copy()
+        env["PATH"] = os.pathsep.join([str(duplicate_dir), os.path.dirname(curl), env["PATH"]])
+        probe = subprocess.run(
+            [powershell[0], "-NoProfile", "-Command", "(Get-Command curl.exe -CommandType Application).Count"],
+            cwd=self.base, env=env, capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(0, probe.returncode, probe.stdout + probe.stderr)
+        self.assertGreaterEqual(int(probe.stdout.strip()), 2)
+
+        model = self.base / "powershell-multiple-curl" / "vad" / "model.onnx"
+        folder = model.parents[1]
+        rows = [f"{SHA256}\t{len(PAYLOAD)}\tvad/model.onnx\t{self.url}/model"]
+        result = self.run_script("powershell", powershell, folder, rows=rows, env=env)
+        self.assert_ok(result)
+        self.assertEqual(PAYLOAD, model.read_bytes())
 
 
 class ManifestTests(unittest.TestCase):
