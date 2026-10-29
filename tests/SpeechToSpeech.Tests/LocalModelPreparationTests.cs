@@ -117,6 +117,54 @@ public sealed class LocalModelPreparationTests : IDisposable
     }
 
     [Fact]
+    public async Task PrepareAsync_reuses_verification_for_unchanged_model_files()
+    {
+        var plan = LocalModelPreparation.BuildPlan(CommandLine.Parse(["local"]), _root);
+        WriteManifestFiles(DefaultFiles);
+        await LocalModelPreparation.PrepareAsync(plan, (_, _) => Task.FromResult(0), CancellationToken.None);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var vadFile = Path.Combine(_root, "models", "vad", "silero_vad.onnx");
+        using var lockedFile = new FileStream(vadFile, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        await LocalModelPreparation.PrepareAsync(plan, (_, _) => Task.FromResult(0), CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task PrepareAsync_rechecks_assets_when_file_metadata_changes()
+    {
+        var plan = LocalModelPreparation.BuildPlan(CommandLine.Parse(["local"]), _root);
+        WriteManifestFiles(DefaultFiles);
+        await LocalModelPreparation.PrepareAsync(plan, (_, _) => Task.FromResult(0), CancellationToken.None);
+
+        var vadFile = Path.Combine(_root, "models", "vad", "silero_vad.onnx");
+        var oldTimestamp = File.GetLastWriteTimeUtc(vadFile);
+        File.WriteAllBytes(vadFile, Encoding.UTF8.GetBytes("tampered text"));
+        File.SetLastWriteTimeUtc(vadFile, oldTimestamp.AddSeconds(5));
+
+        ProcessStartInfo? invoked = null;
+        await LocalModelPreparation.PrepareAsync(
+            plan,
+            (startInfo, _) =>
+            {
+                invoked = startInfo;
+                WriteManifestFiles(["vad/silero_vad.onnx"]);
+                return Task.FromResult(0);
+            },
+            CancellationToken.None);
+
+        Assert.NotNull(invoked);
+        var groupsOption = OperatingSystem.IsWindows() ? "-Groups" : "--groups";
+        var groupsIndex = Array.IndexOf(invoked.ArgumentList.ToArray(), groupsOption);
+        Assert.NotEqual(-1, groupsIndex);
+        Assert.Equal("vad", invoked.ArgumentList[groupsIndex + 1]);
+    }
+
+    [Fact]
     public async Task PrepareAsync_runs_process_for_missing_group_and_rechecks_files()
     {
         var plan = LocalModelPreparation.BuildPlan(CommandLine.Parse(["local"]), _root);

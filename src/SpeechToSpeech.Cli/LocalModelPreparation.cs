@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using ElBruno.QwenTTS.Pipeline;
 
@@ -16,6 +17,7 @@ internal sealed class LocalModelPlan(
     string modelsDirectory,
     string manifestPath,
     string scriptPath,
+    string verificationCachePath,
     IReadOnlyList<string> selectedGroups,
     IReadOnlyList<LocalModelAsset> manifestEntries,
     IReadOnlyList<LocalModelDefaultPath> defaultPaths,
@@ -24,6 +26,7 @@ internal sealed class LocalModelPlan(
     public string ModelsDirectory { get; } = modelsDirectory;
     public string ManifestPath { get; } = manifestPath;
     public string ScriptPath { get; } = scriptPath;
+    public string VerificationCachePath { get; } = verificationCachePath;
     public IReadOnlyList<string> SelectedGroups { get; } = selectedGroups;
     public IReadOnlyList<LocalModelAsset> ManifestEntries { get; } = manifestEntries;
     public IReadOnlyList<LocalModelDefaultPath> DefaultPaths { get; } = defaultPaths;
@@ -35,6 +38,8 @@ internal static class LocalModelPreparation
     private static readonly string[] KnownGroups = ["vad", "whisper", "llm", "tts", "smart-turn"];
     private const string DefaultLlmFile = "llm/Qwen3.5-0.8B-Q4_K_M.gguf";
     private const string DefaultSmartTurnFile = "smart-turn/smart-turn-v3.2-cpu.onnx";
+
+    private sealed record VerificationReceipt(long Size, long LastWriteTimeUtcTicks, string Sha256);
 
     public static LocalModelPlan BuildPlan(CommandLine line, string repositoryRoot)
     {
@@ -144,6 +149,7 @@ internal static class LocalModelPreparation
             modelsDirectory,
             manifestPath,
             scriptPath,
+            Path.Combine(modelsDirectory, ".model-verification-cache.json"),
             groups,
             entries.Where(entry => groups.Contains(entry.Group, StringComparer.Ordinal)).ToArray(),
             defaults,
@@ -173,15 +179,22 @@ internal static class LocalModelPreparation
         CancellationToken cancellationToken)
     {
         ValidateCustomPaths(plan.CustomPaths);
+        if (plan.SelectedGroups.Count == 0)
+        {
+            return;
+        }
 
+        var verificationCache = ReadVerificationCache(plan.VerificationCachePath);
+        var changedReceipts = new HashSet<string>(StringComparer.Ordinal);
         var missingGroups = plan.SelectedGroups
             .Where(group => plan.ManifestEntries
                 .Where(entry => entry.Group == group)
-                .Any(entry => !IsValidAsset(plan.ModelsDirectory, entry)))
+                .Any(entry => !IsValidAsset(plan.ModelsDirectory, entry, verificationCache, changedReceipts)))
             .ToArray();
 
         if (missingGroups.Length == 0)
         {
+            WriteVerificationCache(plan.VerificationCachePath, verificationCache, changedReceipts.Count > 0);
             return;
         }
 
@@ -205,7 +218,7 @@ internal static class LocalModelPreparation
 
         var invalidAssets = plan.ManifestEntries
             .Where(entry => missingGroups.Contains(entry.Group, StringComparer.Ordinal))
-            .Where(entry => !IsValidAsset(plan.ModelsDirectory, entry))
+            .Where(entry => !IsValidAsset(plan.ModelsDirectory, entry, verificationCache, changedReceipts))
             .Select(entry => entry.RelativePath)
             .ToArray();
         if (invalidAssets.Length > 0)
@@ -213,6 +226,8 @@ internal static class LocalModelPreparation
             throw new InvalidOperationException(
                 $"Model download completed but required files are missing or invalid: {string.Join(", ", invalidAssets)}");
         }
+
+        WriteVerificationCache(plan.VerificationCachePath, verificationCache, changedReceipts.Count > 0);
     }
 
     public static async Task<int> RunProcessAsync(
@@ -305,23 +320,120 @@ internal static class LocalModelPreparation
         return entries;
     }
 
-    private static bool IsValidAsset(string modelsDirectory, LocalModelAsset entry)
+    private static bool IsValidAsset(
+        string modelsDirectory,
+        LocalModelAsset entry,
+        Dictionary<string, VerificationReceipt> verificationCache,
+        HashSet<string> changedReceipts)
     {
         var path = Path.Combine(modelsDirectory, entry.RelativePath.Replace('/', Path.DirectorySeparatorChar));
         if (!File.Exists(path))
         {
+            if (verificationCache.Remove(entry.RelativePath))
+            {
+                changedReceipts.Add(entry.RelativePath);
+            }
+
             return false;
         }
 
         var file = new FileInfo(path);
         if (file.Length != entry.Size)
         {
+            if (verificationCache.Remove(entry.RelativePath))
+            {
+                changedReceipts.Add(entry.RelativePath);
+            }
+
             return false;
+        }
+
+        var lastWriteTicks = file.LastWriteTimeUtc.Ticks;
+        if (verificationCache.TryGetValue(entry.RelativePath, out var receipt) &&
+            receipt.Size == file.Length &&
+            receipt.LastWriteTimeUtcTicks == lastWriteTicks &&
+            string.Equals(receipt.Sha256, entry.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
         }
 
         using var stream = file.OpenRead();
         var hash = Convert.ToHexStringLower(SHA256.HashData(stream));
-        return hash.Equals(entry.Sha256, StringComparison.OrdinalIgnoreCase);
+        if (!hash.Equals(entry.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            if (verificationCache.Remove(entry.RelativePath))
+            {
+                changedReceipts.Add(entry.RelativePath);
+            }
+
+            return false;
+        }
+
+        verificationCache[entry.RelativePath] = new VerificationReceipt(file.Length, lastWriteTicks, hash);
+        changedReceipts.Add(entry.RelativePath);
+        return true;
+    }
+
+    private static Dictionary<string, VerificationReceipt> ReadVerificationCache(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return new Dictionary<string, VerificationReceipt>(StringComparer.Ordinal);
+        }
+
+        try
+        {
+            var receipts = JsonSerializer.Deserialize<Dictionary<string, VerificationReceipt>>(File.ReadAllText(path));
+            if (receipts is not null)
+            {
+                return new Dictionary<string, VerificationReceipt>(receipts, StringComparer.Ordinal);
+            }
+        }
+        catch (JsonException ex)
+        {
+            Console.Error.WriteLine(
+                $"warning: model verification cache is invalid ({ex.Message}); rechecking model hashes.");
+        }
+
+        return new Dictionary<string, VerificationReceipt>(StringComparer.Ordinal);
+    }
+
+    private static void WriteVerificationCache(
+        string path,
+        IReadOnlyDictionary<string, VerificationReceipt> receipts,
+        bool changed)
+    {
+        if (!changed)
+        {
+            return;
+        }
+
+        var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(receipts));
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine(
+                $"warning: could not save model verification cache {path} ({ex.Message}); hashes will be checked again next startup.");
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                try
+                {
+                    File.Delete(temporaryPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Console.Error.WriteLine(
+                        $"warning: could not remove temporary model verification cache {temporaryPath} ({ex.Message}).");
+                }
+            }
+        }
     }
 
     private static void ValidateCustomPaths(IReadOnlyList<LocalModelCustomPath> paths)
