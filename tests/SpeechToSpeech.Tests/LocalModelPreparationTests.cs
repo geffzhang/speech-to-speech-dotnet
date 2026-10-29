@@ -46,6 +46,16 @@ public sealed class LocalModelPreparationTests : IDisposable
     }
 
     [Fact]
+    public void BuildPlan_selects_default_server_backend_groups()
+    {
+        var line = CommandLine.Parse(["serve"]);
+
+        var plan = LocalModelPreparation.BuildPlan(line, _root);
+
+        Assert.Equal(["vad", "whisper", "llm", "tts", "smart-turn"], plan.SelectedGroups);
+    }
+
+    [Fact]
     public void BuildPlan_omits_remote_backend_groups()
     {
         var line = CommandLine.Parse(["local", "--stt", "openai", "--llm_backend", "openai", "--tts", "openai"]);

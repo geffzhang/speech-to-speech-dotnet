@@ -77,7 +77,7 @@ bash ./download-models.sh
 完整 URL、固定提交版本、字节数与 SHA-256 在
 [`tools/models/models.tsv`](tools/models/models.tsv)，不在运行时解析 `main` / `master`：
 
-手动下载时可按模型组筛选（`local` 启动时也会使用此筛选，只准备本地后端需要的组）：
+手动下载时可按模型组筛选（`serve` 和 `local` 启动时也会使用此筛选，只准备本地后端需要的组）：
 
 ```powershell
 .\download-models.ps1 -Groups vad,whisper
@@ -89,11 +89,10 @@ bash ./download-models.sh --groups vad,whisper
 
 可用组为 `vad`、`whisper`、`llm`、`tts`、`smart-turn`；省略筛选仍下载全部五组。
 
-`local` 会在构建后端和开始监听前检查内置本地后端需要的模型，只下载缺失或校验不通过的模型组；
-默认管线会自动准备五组模型。自定义模型路径始终由用户管理，不会被替换；若文件缺失，`local`
-会在启动监听前报错。SHA-256 校验通过后会把文件元数据记在
+`serve` 和 `local` 都会在构建后端和开始监听前检查内置本地后端需要的模型，只下载缺失或校验不通过的模型组；
+默认管线会自动准备五组模型。自定义模型路径始终由用户管理，不会被替换；若文件缺失，命令会在启动监听前报错。SHA-256 校验通过后会把文件元数据记在
 `models/.model-verification-cache.json`，未变化的权重后续启动无需重复读取数 GB 文件；删除该记录会触发重新校验。
-`serve` 和 `talk` 的启动行为不变。
+`talk` 不需要模型，启动行为不变。
 
 | 段 | 参数 | 下载目标（相对 `models/`） | 来源 |
 |---|---|---|---|
@@ -130,15 +129,12 @@ ManySpeech 所需格式；TTS 的 `.onnx.data` 等配套文件也不能遗漏。
 ### 起服务
 
 ```bash
-S2S="$PWD/models" # 自定义下载目录时改为对应路径
 dotnet run --project src/SpeechToSpeech.Cli -- serve \
-  --port 8765 \
-  --vad_model_dir "$S2S/vad" \
-  --whisper_model_dir "$S2S/whisper" \
-  --qwen3_model_dir "$S2S/tts" \
-  --smart_turn_model_path "$S2S/smart-turn/smart-turn-v3.2-cpu.onnx" \
-  --llm_model_path "$S2S/llm/Qwen3.5-0.8B-Q4_K_M.gguf"
+  --port 8765
 ```
+
+`serve` 会自动准备所选本地后端需要的默认模型；传入自定义模型路径时仍由你自行准备。
+如需使用自定义模型根目录，可在启动时显式传入对应模型路径。
 
 看到这行就算起来了：
 
@@ -163,9 +159,8 @@ dotnet run --project src/SpeechToSpeech.Cli -- local
 
 > 用耳机，否则助手会听见自己。`talk` / `local` 支持 `--block-mic-during-playback` 在播放期间闭嘴。
 
-> **真跑必读**：`talk` 必须对着**带全模型路径**起的 `serve` 用。`serve` 不会自动下载模型；
-> 缺 VAD 模型目录时，它会在连接构建期拒绝连接，客户端收不到 `session.created` 等事件。
-> `local` 则会在开始监听前自动准备所需的默认模型组，缺失的自定义模型会明确报错。
+> **真跑必读**：`talk` 必须对着可用的 `serve` 用。`serve` / `local` 会在开始监听前自动准备所需的默认模型组；
+> 缺失的自定义模型会明确报错，不会被自动替换。
 
 ---
 

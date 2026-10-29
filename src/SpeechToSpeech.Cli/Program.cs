@@ -37,7 +37,7 @@ internal static class Program
             }
 
             RegisterBackends();
-            if (line.Command == "local")
+            if (line.Command is "local" or "serve")
             {
                 var plan = LocalModelPreparation.BuildPlan(line, LocalModelPreparation.FindRepositoryRoot());
                 LocalModelPreparation.ApplyDefaultPaths(line, plan);

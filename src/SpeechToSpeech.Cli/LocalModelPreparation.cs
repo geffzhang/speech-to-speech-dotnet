@@ -43,6 +43,11 @@ internal static class LocalModelPreparation
 
     public static LocalModelPlan BuildPlan(CommandLine line, string repositoryRoot)
     {
+        if (line.Command is not ("local" or "serve"))
+        {
+            throw new ArgumentException($"Model preparation is not supported for command '{line.Command}'.", nameof(line));
+        }
+
         var root = Path.GetFullPath(repositoryRoot);
         var manifestPath = Path.Combine(root, "tools", "models", "models.tsv");
         var scriptPath = Path.Combine(root, OperatingSystem.IsWindows() ? "download-models.ps1" : "download-models.sh");
