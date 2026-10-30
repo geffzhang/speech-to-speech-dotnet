@@ -77,6 +77,19 @@ bash ./download-models.sh
 完整 URL、固定提交版本、字节数与 SHA-256 在
 [`tools/models/models.tsv`](tools/models/models.tsv)，不在运行时解析 `main` / `master`：
 
+默认直接从清单中的来源下载。网络无法访问 Hugging Face 时，可设置 `S2S_MODEL_MIRROR`
+为镜像基地址（例如 `https://hf-mirror.com`），脚本会优先从镜像下载 Hugging Face 文件；
+镜像下载失败时自动回退到原始 `huggingface.co` 地址。ModelScope 等非 Hugging Face URL 不会被改写。
+
+```powershell
+$env:S2S_MODEL_MIRROR = 'https://hf-mirror.com'
+.\download-models.ps1
+```
+
+```bash
+S2S_MODEL_MIRROR=https://hf-mirror.com bash ./download-models.sh
+```
+
 手动下载时可按模型组筛选（`serve` 和 `local` 启动时也会使用此筛选，只准备本地后端需要的组）：
 
 ```powershell
@@ -425,7 +438,7 @@ python ~/.workbuddy/skills/cross-lang-porting/scripts/diff_corpus.py verify --co
 | `D010` | 上游多数后端无 C# 运行时 | 注册表 32 个名字里 21 个不可用——名字保留、选择即报明确原因，不静默降级 |
 | `D008` | ManySpeech 本地 STT 无增量转写 | 走 `whisper` / `paraformer` 时没有 `transcription.delta`；流式路径由 `openai-realtime` / `vllm-realtime` 承担 |
 | `D036` | STT 参数命名统一 `{backend}_*` 模板 | 上游是 `vllm_realtime_stt_*`；映射表在 `docs/vllm-realtime-d005-integration.md` §5.1 |
-| `E003` | `serve` 保持本地模型懒加载 | `local` 已在监听前准备默认模型并校验自定义路径；单独运行 `serve` 时模型仍按原行为在连接/首次使用时检查 |
+| `E003` | `serve` 在监听前准备本地默认模型，权重仍懒加载 | `serve` 与 `local` 都会在监听前准备所选后端的默认模型并校验自定义路径；模型权重仍在首次推理时加载 |
 | `C005` | 分句器由 Punkt 改为确定性规则 | **刻意改进**：上游 Punkt 用英文模型，中文标点完全不切；本实现按全角标点切，中文长回复的首段音频不拖到最后 |
 
 完整清单见 `porting/02-differences.md`（机器可读源 `porting/differences.jsonl`）。
@@ -449,7 +462,7 @@ python tools/ledger/check_doc_sync.py --strict
 # 2. 构建（0 警告 0 错误是硬要求）
 dotnet build SpeechToSpeech.slnx --no-incremental
 
-# 3. 单元测试（当前 688 例）
+# 3. 单元测试（当前 713 例）
 dotnet test tests/SpeechToSpeech.Tests/SpeechToSpeech.Tests.csproj
 
 # 4. 差分语料（六类）
@@ -517,7 +530,7 @@ src/
                                     SpeakerEmbedding / Lingua
   SpeechToSpeech.Demo.Web/          浏览器 demo 的 ASP.NET Core 10 服务端
   SpeechToSpeech.Evals/             Big Bench Audio 评估套件
-tests/SpeechToSpeech.Tests/         单元测试（688 例）
+tests/SpeechToSpeech.Tests/         单元测试（713 例）
 corpus/                             差分语料（六类）
 tools/                              探针（参照侧 Python + 本实现 C#）、冒烟脚本、账本检查
 porting/                            四本账

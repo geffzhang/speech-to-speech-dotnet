@@ -6,6 +6,12 @@ Download and verify the default local pipeline models.
 .\download-models.ps1
 .EXAMPLE
 .\download-models.ps1 -ModelsDir .\cache\models
+.EXAMPLE
+$env:S2S_MODEL_MIRROR = 'https://hf-mirror.com'
+.\download-models.ps1
+.DESCRIPTION
+Set S2S_MODEL_MIRROR to a mirror base URL for Hugging Face model downloads.
+Failed mirror downloads retry the original huggingface.co URL.
 #>
 [CmdletBinding()]
 param(

@@ -10,6 +10,8 @@ groups_set=false
 fail() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 usage() {
     printf 'Usage: bash download-models.sh [--models-dir DIR] [--manifest TSV] [--groups LIST]\n'
+    printf '  S2S_MODEL_MIRROR      Optional Hugging Face mirror base URL; failed mirror downloads retry huggingface.co.\n'
+    printf '  S2S_MODEL_MIRROR  Optional Hugging Face mirror base URL; failed mirror downloads retry huggingface.co.\n'
 }
 while (($#)); do
     case "$1" in
