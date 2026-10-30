@@ -105,6 +105,12 @@ if [[ "$groups_set" == true ]]; then
 fi
 
 file_size() { wc -c < "$1" | tr -d '[:space:]'; }
+fallback_url() {
+    local url="$1" mirror="${S2S_MODEL_MIRROR:-}"
+    if [[ -n "$mirror" && "$url" == https://huggingface.co/* ]]; then
+        printf '%s/%s' "${mirror%/}" "${url#https://huggingface.co/}"
+    fi
+}
 verified() {
     [[ -f "$1" ]] || return 1
     [[ "$(file_size "$1")" == "$2" ]] || return 1
@@ -129,18 +135,37 @@ for ((i = 0; i < ${#paths[@]}; i++)); do
             rm -- "$partial"
         fi
         printf '[download/resume] %s\n' "$relative"
+        primary_url="${urls[$i]}"
+        mirror_url="$(fallback_url "$primary_url")"
+        download_url="$primary_url"
+        [[ -z "$mirror_url" ]] || download_url="$mirror_url"
         curl_args=(
             --fail --location --show-error --retry 3
             --connect-timeout 30 --speed-limit 1024 --speed-time 60
             --proto '=http,https' --proto-redir '=http,https'
-            --output "$partial" --url "${urls[$i]}"
+            --output "$partial" --url "$download_url"
         )
+        resume_args=(--continue-at -)
         code=0
-        curl "${curl_args[@]}" --continue-at - || code=$?
+        curl "${curl_args[@]}" "${resume_args[@]}" || code=$?
         if ((code == 33)); then
             printf 'Warning: server does not support resuming; restarting: %s\n' "$relative" >&2
+            resume_args=()
             code=0
             curl "${curl_args[@]}" || code=$?
+        fi
+        if ((code != 0)) && [[ -n "$mirror_url" ]]; then
+            printf 'Warning: mirror download failed; retrying the original source: %s\n' "$relative" >&2
+            rm -f -- "$partial"
+            curl_args[${#curl_args[@]}-1]="$primary_url"
+            code=0
+            curl "${curl_args[@]}" "${resume_args[@]}" || code=$?
+            if ((code == 33)); then
+                printf 'Warning: server does not support resuming; restarting: %s\n' "$relative" >&2
+                resume_args=()
+                code=0
+                curl "${curl_args[@]}" || code=$?
+            fi
         fi
         ((code == 0)) || fail "curl exited $code for $relative. Partial retained; rerun to resume."
         if ! verified "$partial" "$size" "$sha"; then

@@ -23,6 +23,15 @@ function Test-ModelFile([string] $Path, [long] $Size, [string] $Sha256) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash -eq $Sha256
 }
 
+function Get-MirrorUrl([string] $Url) {
+    $mirror = $env:S2S_MODEL_MIRROR
+    $prefix = 'https://huggingface.co/'
+    if ($mirror -and $Url.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+        return $mirror.TrimEnd('/') + '/' + $Url.Substring($prefix.Length)
+    }
+    return $null
+}
+
 try {
     $curlName = if ($env:OS -eq 'Windows_NT') { 'curl.exe' } else { 'curl' }
     $curlCommand = Get-Command $curlName -CommandType Application -ErrorAction Stop | Select-Object -First 1
@@ -93,18 +102,36 @@ try {
                 Remove-Item -LiteralPath $partial
             }
             Write-Host "[download/resume] $($entry.Path)"
+            $primaryUrl = $entry.Url
+            $mirrorUrl = Get-MirrorUrl $primaryUrl
+            $downloadUrl = if ($mirrorUrl) { $mirrorUrl } else { $primaryUrl }
             $curlArgs = @(
                 '--fail', '--location', '--show-error', '--retry', '3',
                 '--connect-timeout', '30', '--speed-limit', '1024', '--speed-time', '60',
                 '--proto', '=http,https', '--proto-redir', '=http,https',
-                '--output', $partial, '--url', $entry.Url
+                '--output', $partial, '--url', $downloadUrl
             )
-            & $curl @curlArgs --continue-at -
+            $resumeArgs = @('--continue-at', '-')
+            & $curl @curlArgs @resumeArgs
             $code = $LASTEXITCODE
             if ($code -eq 33) {
                 Write-Warning "Server does not support resuming; restarting: $($entry.Path)"
+                $resumeArgs = @()
                 & $curl @curlArgs
                 $code = $LASTEXITCODE
+            }
+            if ($code -ne 0 -and $mirrorUrl) {
+                Write-Warning "Mirror download failed; retrying original source: $($entry.Path)"
+                Remove-Item -LiteralPath $partial -ErrorAction SilentlyContinue
+                $curlArgs[-1] = $primaryUrl
+                & $curl @curlArgs @resumeArgs
+                $code = $LASTEXITCODE
+                if ($code -eq 33) {
+                    Write-Warning "Server does not support resuming; restarting: $($entry.Path)"
+                    $resumeArgs = @()
+                    & $curl @curlArgs
+                    $code = $LASTEXITCODE
+                }
             }
             if ($code -ne 0) {
                 throw "curl exited $code for $($entry.Path). Partial retained; rerun this command to resume."

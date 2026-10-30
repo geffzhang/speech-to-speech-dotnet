@@ -19,7 +19,7 @@ SHA256 = hashlib.sha256(PAYLOAD).hexdigest()
 class ModelHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.server.requests.append((self.path, self.headers.get("Range")))
-        if self.path == "/missing":
+        if self.path in self.server.not_found_paths:
             self.send_error(404)
             return
         start = 0
@@ -67,6 +67,7 @@ class DownloadTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ModelHandler)
         self.server.requests = []
+        self.server.not_found_paths = set()
         thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(self.server.server_close)
@@ -165,7 +166,11 @@ class DownloadTests(unittest.TestCase):
             target.write_bytes(b"old")
             partial = Path(str(target) + ".part")
             partial.write_bytes(PAYLOAD[:4096])
-            result = self.run_script(name, command, folder, endpoint="/missing")
+            self.server.not_found_paths = {"/missing"}
+            try:
+                result = self.run_script(name, command, folder, endpoint="/missing")
+            finally:
+                self.server.not_found_paths.clear()
             self.assertNotEqual(0, result.returncode)
             self.assertEqual(b"old", target.read_bytes())
             self.assertEqual(PAYLOAD[:4096], partial.read_bytes())
